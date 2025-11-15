@@ -1,4 +1,9 @@
-# DBT and Airflow Data Pipeline Project
+# DBT + Airflow + SQL Server DataOps Project
+
+![DBT CI](https://github.com/YOUR_USERNAME/dbt-airflow-
+dataops/workflows/DBT%20CI%20Pipeline/badge.svg)
+![Python Quality](https://github.com/YOUR_USERNAME/dbt-airflow-
+dataops/workflows/Python%20Code%20Quality/badge.svg)
 
 ## Project Overview
 This project implements an automated data transformation pipeline using DBT (Data Build Tool) and Apache Airflow. The pipeline extracts data from SQL Server, transforms it using DBT models, and loads it into a target database, following modern data engineering best practices.
@@ -45,72 +50,72 @@ dbt_airflow_project/
 ### Component Details
 
 #### 1. Airflow Components
-- **dags/**: 
+- **dags/**:
   - Purpose: Stores Airflow DAG (Directed Acyclic Graph) definitions
   - Contents: Python files defining workflow orchestration
   - Key File: `dbt_dag.py` - Orchestrates the DBT transformation pipeline
   - Usage: Schedules and monitors DBT model runs and tests
 
-- **logs/**: 
+- **logs/**:
   - Purpose: Contains Airflow execution logs
   - Usage: Debugging and monitoring task execution
   - Retention: Typically keeps logs for last 30 days
 
 #### 2. DBT Components
-- **models/staging/**: 
+- **models/staging/**:
   - Purpose: First layer of transformation
   - Contents: SQL models that clean and standardize raw data
   - Example: `stg_sales_orders.sql` combines and standardizes sales order tables
   - Materialization: Usually materialized as views for flexibility
 
-- **models/marts/**: 
+- **models/marts/**:
   - Purpose: Final transformation layer
   - Contents: Business-level transformations ready for reporting
   - Materialization: Usually materialized as tables for performance
   - Usage: Direct connection to BI tools
 
-- **dbt_project.yml**: 
+- **dbt_project.yml**:
   - Purpose: DBT project configuration
-  - Contents: 
+  - Contents:
     - Project name and version
     - Model configurations
     - Materialization settings
     - Custom macro configurations
 
-- **packages.yml**: 
+- **packages.yml**:
   - Purpose: Manages external DBT packages
   - Current Packages:
     - dbt-utils: Provides additional SQL macros and functions
   - Usage: Install packages using `dbt deps`
 
-- **profiles.yml**: 
+- **profiles.yml**:
   - Purpose: Database connection configuration
-  - Contents: 
+  - Contents:
     - Connection credentials
     - Target database settings
     - Environment-specific configurations
 
 #### 3. Docker Components
-- **docker-compose.yml**: 
+- **docker-compose.yml**:
   - Purpose: Container orchestration
   - Services Defined:
     1. **airflow-webserver**: Web interface for Airflow
        - Port: 8080
        - Usage: Monitor and manage DAGs
-    
+
     2. **airflow-scheduler**: Airflow task scheduler
        - Purpose: Executes DAGs based on schedule
        - Dependencies: PostgreSQL for metadata
-    
+
     3. **postgres**: Airflow metadata database
        - Purpose: Stores Airflow state and history
        - Port: 5432
-    
+
     4. **sqlserver**: Source database
        - Purpose: Stores raw data
        - Port: 1433
        - Database: AdventureWorks
-    
+
     5. **dbt**: DBT transformation container
        - Purpose: Executes DBT commands
        - Mounts: ./dbt directory for access to models
@@ -417,4 +422,4 @@ Common issues and solutions:
 For additional support:
 - Check the project issues
 - Contact the development team
-- Refer to DBT and Airflow documentation 
+- Refer to DBT and Airflow documentation
