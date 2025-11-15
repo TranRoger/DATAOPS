@@ -4,6 +4,7 @@ with sales_order_header as (
         OrderDate as order_date,
         DueDate as due_date,
         ShipDate as ship_date,
+        TotalDue as total_due,
         Status as status,
         OnlineOrderFlag as online_order_flag,
         SalesOrderNumber as sales_order_number,
@@ -31,6 +32,7 @@ select
     h.order_date,
     h.due_date,
     h.ship_date,
+    h.total_due,
     h.status,
     h.online_order_flag,
     h.sales_order_number,
@@ -46,4 +48,4 @@ select
     d.line_total
 from sales_order_header h
 left join sales_order_detail d
-    on h.sales_order_id = d.sales_order_id 
+    on h.sales_order_id = d.sales_order_id

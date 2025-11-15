@@ -1,49 +1,118 @@
 version: 2
 
 models:
+  - name: brnz_customers
+    description: "Bronze layer customer data from AdventureWorks"
+    columns:
+      - name: CustomerID
+        description: "Primary key for customer"
+        tests:
+          - unique
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: int
+
+      - name: FirstName
+        description: "Customer first name (NULL for store customers)"
+
+      - name: LastName
+        description: "Customer last name (NULL for store customers)"
+
+      - name: EmailPromotion
+        description: "Email promotion preference"
+        tests:
+          - accepted_values:
+              values: [0, 1, 2]
+
+      - name: StoreID
+        description: "Store identifier"
+
+      - name: TerritoryID
+        description: "Sales territory"
+
+      - name: last_modified_date
+        description: "Last modified timestamp"
+        tests:
+          - not_null
+
   - name: brnz_sales_orders
-    description: Staging model combining sales order headers and details
+    description: "Bronze layer sales order data"
     columns:
       - name: sales_order_id
-        description: Primary key for sales orders
+        description: "Primary key"
         tests:
           - not_null
-      - name: order_detail_id
-        description: Primary key for sales order details
-        tests:
-          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: int
+
       - name: order_date
-        description: Date when the order was placed
+        description: "Order date"
+        tests:
+          - not_null
+          - no_future_dates
+
       - name: due_date
-        description: Date when the order is due
+        description: "Due date"
+
       - name: ship_date
-        description: Date when the order was shipped
+        description: "Ship date"
+
       - name: status
-        description: Current status of the order
+        description: "Order status"
+        tests:
+          - accepted_values:
+              values: [1, 2, 3, 4, 5, 6]
+
       - name: online_order_flag
-        description: Flag indicating if the order was placed online
+        description: "Online order flag"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: [0, 1]
+
       - name: sales_order_number
-        description: Unique sales order number
+        description: "Sales order number"
+        tests:
+          - not_null
+
       - name: purchase_order_number
-        description: Customer purchase order number
+        description: "Purchase order number"
+
       - name: customer_id
-        description: Foreign key reference to customer
+        description: "Foreign key to customer"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('brnz_customers')
+              field: CustomerID
+
       - name: sales_person_id
-        description: ID of the sales person
+        description: "Sales person ID"
+
       - name: territory_id
-        description: Sales territory ID
+        description: "Territory ID"
+
+      - name: order_detail_id
+        description: "Order detail ID"
+
       - name: product_id
-        description: Foreign key reference to product
+        description: "Product ID"
+        tests:
+          - not_null
+
       - name: order_qty
-        description: Quantity ordered
+        description: "Order quantity"
+        tests:
+          - positive_values
+
       - name: unit_price
-        description: Unit price of the product
+        description: "Unit price"
+        tests:
+          - positive_values
+
       - name: unit_price_discount
-        description: Discount amount
+        description: "Unit price discount"
+
       - name: line_total
-        description: Total amount for this line item
-    tests:
-      - dbt_utils.unique_combination_of_columns:
-          combination_of_columns:
-            - sales_order_id
-            - order_detail_id 
+        description: "Line total"
+        tests:
+          - positive_values

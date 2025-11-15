@@ -2,20 +2,46 @@ version: 2
 
 sources:
   - name: raw
+    description: "AdventureWorks 2014 source database"
     database: AdventureWorks2014
-    schema: dbo
+    schema: Sales
+
+    # Default freshness for all tables
+    freshness:
+      warn_after: {count: 24, period: hour}
+      error_after: {count: 48, period: hour}
+
+    loaded_at_field: ModifiedDate
+
     tables:
       - name: Customer
-        description: "Raw customer data from AdventureWorks"
-      - name: Person
-        description: "Raw person data from AdventureWorks"
+        description: "Customer master data"
+        identifier: Customer
+        freshness:
+          warn_after: {count: 12, period: hour}
+          error_after: {count: 24, period: hour}
+        columns:
+          - name: CustomerID
+            description: "Primary key"
+            tests:
+              - unique
+              - not_null
+
+          - name: ModifiedDate
+            description: "Last modification timestamp"
+
       - name: SalesOrderHeader
-        description: "Raw sales order header data from AdventureWorks"
-      - name: SalesOrderDetail
-        description: "Raw sales order detail data from AdventureWorks"
-      - name: Product
-        description: "Raw product data from AdventureWorks"
-      - name: ProductCategory
-        description: "Raw product category data from AdventureWorks"
-      - name: ProductSubcategory
-        description: "Raw product subcategory data from AdventureWorks" 
+        description: "Sales order header data"
+        identifier: SalesOrderHeader
+        freshness:
+          warn_after: {count: 6, period: hour}
+          error_after: {count: 12, period: hour}
+        columns:
+          - name: SalesOrderID
+            tests:
+              - unique
+              - not_null
+
+          - name: CustomerID
+            tests:
+              - not_null
