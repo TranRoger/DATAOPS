@@ -1,9 +1,7 @@
 # DBT + Airflow + SQL Server DataOps Project
 
-![DBT CI](https://github.com/YOUR_USERNAME/dbt-airflow-
-dataops/workflows/DBT%20CI%20Pipeline/badge.svg)
-![Python Quality](https://github.com/YOUR_USERNAME/dbt-airflow-
-dataops/workflows/Python%20Code%20Quality/badge.svg)
+![DBT CI](https://github.com/YOUR_USERNAME/dbt-airflow-dataops/workflows/DBT%20CI%20Pipeline/badge.svg)
+![Python Quality](https://github.com/YOUR_USERNAME/dbt-airflow-dataops/workflows/Python%20Code%20Quality/badge.svg)
 
 ## Project Overview
 This project implements an automated data transformation pipeline using DBT (Data Build Tool) and Apache Airflow. The pipeline extracts data from SQL Server, transforms it using DBT models, and loads it into a target database, following modern data engineering best practices.
