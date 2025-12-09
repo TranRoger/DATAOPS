@@ -10,7 +10,7 @@ RUN apt-get update \
         unixodbc-dev \
         curl \
         gnupg2 \
-        docker.io \
+        ca-certificates \
         git \
     && curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - \
     && curl https://packages.microsoft.com/config/debian/10/prod.list > /etc/apt/sources.list.d/mssql-release.list \
@@ -19,8 +19,22 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Add airflow user to docker group
-RUN usermod -aG docker airflow
+# Remove old Docker packages if any and install Docker CLI using convenience script
+RUN apt-get update \
+    && apt-get remove -y docker.io docker-compose docker-doc podman-docker containerd runc 2>/dev/null || true \
+    && curl -fsSL https://get.docker.com -o get-docker.sh \
+    && sh get-docker.sh \
+    && rm get-docker.sh \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Fix docker socket permission: create docker group with host GID and add airflow user
+RUN groupadd -g 957 docker || groupmod -g 957 docker \
+    && usermod -aG docker airflow
+
+# Change airflow user UID to match host user (for file permissions)
+RUN usermod -u 1000 airflow \
+    && chown -R airflow:root /opt/airflow /home/airflow
 
 # Switch back to airflow user
 USER airflow
@@ -39,4 +53,4 @@ COPY --chown=airflow:root dags/ /opt/airflow/dags/
 COPY --chown=airflow:root plugins/ /opt/airflow/plugins/
 
 # Copy DBT project - FIXED: Use a volume mount instead of COPY
-# The DBT directory will be mounted at runtime via docker-compose.yml 
+# The DBT directory will be mounted at runtime via docker-compose.yml
