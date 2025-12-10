@@ -4,26 +4,126 @@ sources:
   - name: adventureworks
     database: AdventureWorks2014
     schema: Sales
+    description: "AdventureWorks Sales schema - contains customer and sales order data"
+
+    # Source freshness configuration
+    freshness:
+      warn_after: {count: 24, period: hour}
+      error_after: {count: 48, period: hour}
+
+    loaded_at_field: ModifiedDate
+
     tables:
       - name: SalesOrderHeader
-        description: Contains the sales order header information
+        description: "Sales order header - contains order-level information including dates, totals, and customer references"
+        freshness:
+          warn_after: {count: 6, period: hour}
+          error_after: {count: 12, period: hour}
+        columns:
+          - name: SalesOrderID
+            description: "Primary key for sales orders"
+          - name: OrderDate
+            description: "Date the order was placed"
+          - name: CustomerID
+            description: "Foreign key to Customer table"
+          - name: ModifiedDate
+            description: "Last modification timestamp for freshness checks"
+
       - name: SalesOrderDetail
-        description: Contains the sales order detail line items
+        description: "Sales order line items - contains product-level details for each order"
+        columns:
+          - name: SalesOrderDetailID
+            description: "Primary key for order line items"
+          - name: SalesOrderID
+            description: "Foreign key to SalesOrderHeader"
+          - name: ProductID
+            description: "Foreign key to Product table"
+          - name: OrderQty
+            description: "Quantity ordered"
+          - name: UnitPrice
+            description: "Unit price at time of order"
+          - name: LineTotal
+            description: "Total for this line item"
+
       - name: Customer
-        description: Contains customer information
+        description: "Customer master data - business and individual customers"
+        freshness:
+          warn_after: {count: 12, period: hour}
+          error_after: {count: 24, period: hour}
+        columns:
+          - name: CustomerID
+            description: "Primary key for customers"
+          - name: PersonID
+            description: "Foreign key to Person table (NULL for store customers)"
+          - name: StoreID
+            description: "Foreign key to Store table (NULL for individual customers)"
+          - name: TerritoryID
+            description: "Sales territory assignment"
+          - name: ModifiedDate
+            description: "Last modification timestamp"
 
   - name: adventureworks_production
     database: AdventureWorks2014
     schema: Production
+    description: "AdventureWorks Production schema - contains product catalog and manufacturing data"
+
+    freshness:
+      warn_after: {count: 48, period: hour}
+      error_after: {count: 72, period: hour}
+
+    loaded_at_field: ModifiedDate
+
     tables:
       - name: Product
-        description: Contains product information
+        description: "Product catalog - contains all sellable products with pricing and specifications"
+        columns:
+          - name: ProductID
+            description: "Primary key for products"
+          - name: Name
+            description: "Product name"
+          - name: ProductNumber
+            description: "Unique product identifier"
+          - name: StandardCost
+            description: "Cost to manufacture or purchase"
+          - name: ListPrice
+            description: "Selling price"
+          - name: ProductSubcategoryID
+            description: "Foreign key to ProductSubcategory"
+          - name: ModifiedDate
+            description: "Last modification timestamp"
+
       - name: ProductSubcategory
-        description: Contains product subcategory information
+        description: "Product subcategory classifications - organizes products into categories"
+        columns:
+          - name: ProductSubcategoryID
+            description: "Primary key for subcategories"
+          - name: Name
+            description: "Subcategory name"
+          - name: ProductCategoryID
+            description: "Foreign key to ProductCategory"
 
   - name: adventureworks_person
     database: AdventureWorks2014
     schema: Person
+    description: "AdventureWorks Person schema - contains individual person information"
+
+    freshness:
+      warn_after: {count: 48, period: hour}
+      error_after: {count: 72, period: hour}
+
+    loaded_at_field: ModifiedDate
+
     tables:
       - name: Person
-        description: Contains person information 
+        description: "Person master data - contains names and contact preferences for individuals"
+        columns:
+          - name: BusinessEntityID
+            description: "Primary key for persons"
+          - name: FirstName
+            description: "Person's first name"
+          - name: LastName
+            description: "Person's last name"
+          - name: EmailPromotion
+            description: "Email promotion preference (0=No promotions, 1=From AdventureWorks, 2=From partners)"
+          - name: ModifiedDate
+            description: "Last modification timestamp"
