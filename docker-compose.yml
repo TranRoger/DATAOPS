@@ -87,6 +87,8 @@ services:
     command: tail -f /dev/null  # Keep container running
     networks:
       - dbt_airflow_network
+    ports:
+      - "8081:8081"
 
 volumes:
   sqlserver_data:
@@ -94,4 +96,4 @@ volumes:
 
 networks:
   dbt_airflow_network:
-    driver: bridge 
+    driver: bridge
