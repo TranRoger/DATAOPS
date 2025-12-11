@@ -16,9 +16,15 @@ daily_summary as (
         sum(order_qty) as total_items_sold,
         sum(line_total) as total_revenue,
         avg(line_total) as avg_order_line_value,
-        sum(case when order_channel = 'Online' then 1 else 0 end) as online_orders,
-        sum(case when order_channel = 'Offline' then 1 else 0 end) as offline_orders,
-        sum(case when has_discount = 1 then line_total else 0 end) as discounted_revenue
+        sum(
+            case when order_channel = 'Online' then 1 else 0 end
+        ) as online_orders,
+        sum(
+            case when order_channel = 'Offline' then 1 else 0 end
+        ) as offline_orders,
+        sum(
+            case when has_discount = 1 then line_total else 0 end
+        ) as discounted_revenue
     from sales
     group by cast(order_date as date)
 )

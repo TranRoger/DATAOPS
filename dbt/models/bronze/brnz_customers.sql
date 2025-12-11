@@ -14,16 +14,16 @@ person as (
 
 staged as (
     select
-        c.CustomerID,
-        p.FirstName,
-        p.LastName,
-        p.EmailPromotion,
-        c.StoreID,
-        c.TerritoryID,
-        c.ModifiedDate as last_modified_date
-    from source c
-    left join person p
-        on c.PersonID = p.BusinessEntityID
+        c.customerid,
+        p.firstname,
+        p.lastname,
+        p.emailpromotion,
+        c.storeid,
+        c.territoryid,
+        c.modifieddate as last_modified_date
+    from source as c
+    left join person as p
+        on c.personid = p.businessentityid
 )
 
-select * from staged 
+select * from staged

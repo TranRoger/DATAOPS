@@ -20,12 +20,15 @@ customer_sales as (
         count(distinct s.sales_order_id) as total_orders,
         coalesce(sum(s.line_total), 0) as total_revenue,
         avg(s.line_total) as avg_order_value,
-        coalesce(sum(s.order_qty), 0) as total_items_purchased,
+        coalesce(sum(s.order_qty), 0)
+            as total_items_purchased,
         min(s.order_date) as first_order_date,
         max(s.order_date) as last_order_date,
-        sum(case when s.has_discount = 1 then 1 else 0 end) as orders_with_discount
-    from customers c
-    left join sales s
+        sum(
+            case when s.has_discount = 1 then 1 else 0 end
+        ) as orders_with_discount
+    from customers as c
+    left join sales as s
         on c.customer_id = s.customer_id
     group by c.customer_id, c.full_name, c.territory_id
 )

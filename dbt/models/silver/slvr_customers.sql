@@ -10,13 +10,18 @@ with bronze_customers as (
 
 cleaned as (
     select
-        CustomerID as customer_id,
-        coalesce(FirstName, 'Unknown') as first_name,
-        coalesce(LastName, 'Unknown') as last_name,
-        concat(coalesce(FirstName, 'Unknown'), ' ', coalesce(LastName, 'Unknown')) as full_name,
-        EmailPromotion as email_promotion,
-        StoreID as store_id,
-        TerritoryID as territory_id,
+        *,
+        customerid as customer_id,
+        coalesce(firstname, 'Unknown') as first_name,
+        coalesce(lastname, 'Unknown') as last_name,
+        concat(
+            coalesce(firstname, 'Unknown'),
+            ' ',
+            coalesce(lastname, 'Unknown')
+        ) as full_name,
+        emailpromotion as email_promotion,
+        storeid as store_id,
+        territoryid as territory_id,
         last_modified_date
     from bronze_customers
 )
