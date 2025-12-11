@@ -16,7 +16,7 @@ with staged as (
         p.weight,
         p.daystomanufacture,
         p.productline,
-        p.class as productclass,
+        p.[class] as productclass,
         p.style,
         p.productsubcategoryid,
         p.productmodelid,
