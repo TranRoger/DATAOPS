@@ -10,7 +10,6 @@ with bronze_sales as (
 
 cleaned as (
     select
-        *,
         sales_order_id,
         order_detail_id,
         order_date,

@@ -10,7 +10,6 @@ with bronze_products as (
 
 cleaned as (
     select
-        *,
         productid as product_id,
         productname as product_name,
         productnumber as product_number,
@@ -20,7 +19,7 @@ cleaned as (
         coalesce(size, 'N/A') as size,
         coalesce(weight, 0) as weight,
         productline as product_line,
-        class as "class",
+        productclass as product_class,
         style as style,
         productsubcategoryid as subcategory_id,
         coalesce(

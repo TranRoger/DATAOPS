@@ -10,7 +10,6 @@ with bronze_customers as (
 
 cleaned as (
     select
-        *,
         customerid as customer_id,
         coalesce(firstname, 'Unknown') as first_name,
         coalesce(lastname, 'Unknown') as last_name,

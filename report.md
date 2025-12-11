@@ -1627,7 +1627,6 @@ The project implements a multi-layered CI strategy with three specialized workfl
    - Prevents accidental data file commits
 
 3. **Merge Conflict Detection**
-   - Scans for `<<<<<<< HEAD` markers
    - Prevents merging conflicted code
    - Fails fast to prompt resolution
 
