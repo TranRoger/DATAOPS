@@ -4,11 +4,7 @@
     )
 }}
 
-with bronze_customers as (
-    select * from {{ ref('brnz_customers') }}
-),
-
-cleaned as (
+with cleaned as (
     select
         customerid as customer_id,
         coalesce(firstname, 'Unknown') as first_name,
@@ -22,7 +18,7 @@ cleaned as (
         storeid as store_id,
         territoryid as territory_id,
         last_modified_date
-    from bronze_customers
+    from {{ ref('brnz_customers') }}
 )
 
 select * from cleaned

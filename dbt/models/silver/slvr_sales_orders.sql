@@ -4,11 +4,7 @@
     )
 }}
 
-with bronze_sales as (
-    select * from {{ ref('brnz_sales_orders') }}
-),
-
-cleaned as (
+with cleaned as (
     select
         sales_order_id,
         order_detail_id,
@@ -40,7 +36,7 @@ cleaned as (
             when unit_price_discount > 0 then 1
             else 0
         end as has_discount
-    from bronze_sales
+    from {{ ref('brnz_sales_orders') }}
     where
         order_qty > 0
         and unit_price >= 0

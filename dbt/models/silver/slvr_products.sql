@@ -4,11 +4,7 @@
     )
 }}
 
-with bronze_products as (
-    select * from {{ ref('brnz_products') }}
-),
-
-cleaned as (
+with cleaned as (
     select
         productid as product_id,
         productname as product_name,
@@ -34,7 +30,7 @@ cleaned as (
             else 0
         end as is_discontinued,
         last_modified_date
-    from bronze_products
+    from {{ ref('brnz_products') }}
 )
 
 select * from cleaned

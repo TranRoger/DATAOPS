@@ -1,13 +1,4 @@
-with product as (
-    select * from {{ source('adventureworks_production', 'Product') }}
-),
-
-product_subcategory as (
-    select *
-    from {{ source('adventureworks_production', 'ProductSubcategory') }}
-),
-
-staged as (
+with staged as (
     select
         p.productid,
         p.name as productname,
@@ -35,8 +26,8 @@ staged as (
         ps.name as subcategoryname,
         ps.productcategoryid,
         p.modifieddate as last_modified_date
-    from product as p
-    left join product_subcategory as ps
+    from {{ source('adventureworks_production', 'Product') }} as p
+    left join {{ source('adventureworks_production', 'ProductSubcategory') }} as ps
         on p.productsubcategoryid = ps.productsubcategoryid
 )
 
