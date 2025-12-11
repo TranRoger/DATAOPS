@@ -38,7 +38,7 @@ jobs:
 
     - name: Check for merge conflicts
       run: |
-        if git diff --name-only origin/${{ github.base_ref }}...HEAD | xargs grep -l "<<<<<<< HEAD" 2>/dev/null; then
+        if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -v "pr-check.yml" | xargs grep -l "<<<<<<< HEAD" 2>/dev/null; then
           echo "❌ Merge conflicts detected"
           exit 1
         fi
