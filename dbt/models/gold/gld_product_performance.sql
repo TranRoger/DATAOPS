@@ -25,8 +25,7 @@ product_sales as (
         coalesce(sum(s.line_total), 0) as total_revenue,
         avg(s.unit_price) as avg_selling_price,
         coalesce(sum(s.line_total), 0)
-            - (coalesce(sum(s.order_qty), 0) * p.standard_cost)
-            as total_profit,
+        - (coalesce(sum(s.order_qty), 0) * p.standard_cost) as total_profit,
         case
             when sum(s.order_qty) > 0
                 then
