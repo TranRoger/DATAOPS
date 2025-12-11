@@ -27,7 +27,8 @@ with staged as (
         ps.productcategoryid,
         p.modifieddate as last_modified_date
     from {{ source('adventureworks_production', 'Product') }} as p
-    left join {{ source('adventureworks_production', 'ProductSubcategory') }} as ps
+    left join
+        {{ source('adventureworks_production', 'ProductSubcategory') }} as ps
         on p.productsubcategoryid = ps.productsubcategoryid
 )
 
