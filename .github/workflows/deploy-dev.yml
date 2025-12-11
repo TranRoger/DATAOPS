@@ -58,7 +58,7 @@ jobs:
 
   deploy-development:
     name: Deploy to Development Environment
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     needs: pre-deployment-checks
     environment:
       name: development
