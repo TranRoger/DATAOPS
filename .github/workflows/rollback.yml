@@ -84,6 +84,25 @@ jobs:
         cd dbt
         dbt deps --profiles-dir .
 
+    - name: Verify DBT package integrity
+      run: |
+        cd dbt
+        if [ ! -f dbt_packages_hash.txt ]; then
+          echo "❌ dbt_packages_hash.txt not found! Failing for security."
+          exit 1
+        fi
+        # Compute hash of dbt_packages directory (sorted file list for determinism)
+        find dbt_packages -type f -exec sha256sum {} \; | sort -k 2 | sha256sum | awk '{print $1}' > computed_hash.txt
+        expected_hash=$(cat dbt_packages_hash.txt | awk '{print $1}')
+        computed_hash=$(cat computed_hash.txt)
+        if [ "$expected_hash" != "$computed_hash" ]; then
+          echo "❌ DBT package integrity check failed!"
+          echo "Expected: $expected_hash"
+          echo "Actual:   $computed_hash"
+          exit 1
+        else
+          echo "✅ DBT package integrity verified."
+        fi
     - name: Set environment target
       run: |
         if [ "${{ github.event.inputs.environment }}" == "production" ]; then

@@ -103,7 +103,7 @@ jobs:
         python-version: '3.9'
 
     - name: Install DBT
-      run: pip install dbt-sqlserver
+      run: pip install dbt-sqlserver==1.8.2
 
     - name: Install dependencies
       run: |
@@ -113,13 +113,13 @@ jobs:
     - name: Generate documentation
       run: |
         cd dbt
-        dbt docs generate --profiles-dir . || true
+        dbt docs generate --profiles-dir .
       continue-on-error: true
 
     - name: Upload documentation
       uses: actions/upload-artifact@v4
       with:
-        name: dbt-docs
+        name: dbt-docs        cd dbt && sqlfluff lint models/
         path: |
           dbt/target/catalog.json
           dbt/target/manifest.json

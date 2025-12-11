@@ -16,7 +16,7 @@ with cleaned as (
         coalesce(weight, 0) as weight,
         productline as product_line,
         productclass as product_class,
-        style as style,
+        style,
         productsubcategoryid as subcategory_id,
         coalesce(
             subcategoryname,

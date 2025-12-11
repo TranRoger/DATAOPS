@@ -53,18 +53,22 @@ jobs:
       run: |
         echo "🔍 Analyzing changes for production impact..."
 
-        # Check for deleted models
-        DELETED_MODELS=$(git diff --name-status HEAD~1 HEAD 2>/dev/null | grep "^D.*\.sql$" | wc -l || echo "0")
-        if [ $DELETED_MODELS -gt 0 ]; then
-          echo "⚠️  WARNING: $DELETED_MODELS model(s) deleted"
-          echo "🚨 Ensure all downstream dependencies have been updated"
-          git diff --name-status HEAD~1 HEAD 2>/dev/null | grep "^D.*\.sql$" || true
+        # Check if HEAD~1 exists (i.e., not the first commit)
+        if git rev-parse HEAD~1 >/dev/null 2>&1; then
+          # Check for deleted models
+          DELETED_MODELS=$(git diff --name-status HEAD~1 HEAD 2>/dev/null | grep "^D.*\.sql$" | wc -l || echo "0")
+          if [ $DELETED_MODELS -gt 0 ]; then
+            echo "⚠️  WARNING: $DELETED_MODELS model(s) deleted"
+            echo "🚨 Ensure all downstream dependencies have been updated"
+            git diff --name-status HEAD~1 HEAD 2>/dev/null | grep "^D.*\.sql$" || true
+          fi
+
+          # Check for modified models
+          MODIFIED_MODELS=$(git diff --name-status HEAD~1 HEAD 2>/dev/null | grep "^M.*\.sql$" | wc -l || echo "0")
+          echo "📝 $MODIFIED_MODELS model(s) modified"
+        else
+          echo "ℹ️  Initial commit detected. Skipping breaking changes analysis."
         fi
-
-        # Check for modified models
-        MODIFIED_MODELS=$(git diff --name-status HEAD~1 HEAD 2>/dev/null | grep "^M.*\.sql$" | wc -l || echo "0")
-        echo "📝 $MODIFIED_MODELS model(s) modified"
-
         echo "✅ Change analysis complete"
 
   deploy-production:
@@ -87,13 +91,9 @@ jobs:
     - name: Install DBT and dependencies
       run: |
         echo "📦 Installing DBT for production..."
-        pip install dbt-sqlserver==1.8.2
-
-    - name: Install DBT packages
-      run: |
-        echo "📦 Installing DBT packages..."
+        echo "📦 Installing DBT packages with lock file verification..."
         cd dbt
-        dbt deps --profiles-dir .
+        dbt deps --profiles-dir . --lock
 
     - name: Create backup point
       run: |

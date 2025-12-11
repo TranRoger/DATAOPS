@@ -51,10 +51,14 @@ jobs:
         echo "🔍 Checking for breaking changes..."
 
         # Check if any models were deleted
-        DELETED_MODELS=$(git diff --name-status HEAD~1 HEAD | grep "^D.*\.sql$" | wc -l)
-        if [ $DELETED_MODELS -gt 0 ]; then
-          echo "⚠️  Warning: $DELETED_MODELS model(s) deleted. Ensure downstream dependencies are updated."
-          git diff --name-status HEAD~1 HEAD | grep "^D.*\.sql$" || true
+        if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+          DELETED_MODELS=$(git diff --name-status HEAD~1 HEAD | grep "^D.*\.sql$" | wc -l)
+          if [ $DELETED_MODELS -gt 0 ]; then
+            echo "⚠️  Warning: $DELETED_MODELS model(s) deleted. Ensure downstream dependencies are updated."
+            git diff --name-status HEAD~1 HEAD | grep "^D.*\.sql$" || true
+          fi
+        else
+          echo "ℹ️  Only one commit found (no HEAD~1). Skipping deleted models check."
         fi
 
         echo "✅ Pre-deployment checks passed"
@@ -83,6 +87,29 @@ jobs:
         echo "📦 Installing DBT packages (dbt_utils, dbt_expectations)..."
         cd dbt
         dbt deps --profiles-dir .
+
+    - name: Verify DBT package integrity
+      run: |
+        echo "🔒 Verifying DBT package integrity..."
+        cd dbt
+        if [ ! -f "../dbt_packages.hash" ]; then
+          echo "❌ dbt_packages.hash not found. Please generate and commit the hash file."
+          exit 1
+        fi
+        # Compute hash of the dbt_packages directory (sorted file list, then sha256sum)
+        find dbt_packages -type f -exec sha256sum {} \; | sort -k 2 | sha256sum | awk '{print $1}' > dbt_packages.current.hash
+        EXPECTED_HASH=$(cat ../dbt_packages.hash)
+        ACTUAL_HASH=$(cat dbt_packages.current.hash)
+        if [ "$EXPECTED_HASH" != "$ACTUAL_HASH" ]; then
+          echo "❌ DBT package integrity check failed!"
+          echo "Expected:$EXPECTED_HASH"
+          echo "Actual:$ACTUAL_HASH"
+          echo "If you have intentionally updated packages, run:"
+          echo "  find dbt_packages -type f -exec sha256sum {} \\; | sort -k 2 | sha256sum | awk '{print \$1}' > dbt_packages.hash"
+          echo "and commit the updated dbt_packages.hash file."
+          exit 1
+        fi
+        echo "✅ DBT package integrity verified."
 
     - name: Compile DBT models
       run: |
