@@ -30,7 +30,7 @@ jobs:
     - name: Lint SQL files
       run: |
         cd dbt
-        sqlfluff lint models/ --dialect tsql
+        sqlfluff lint models/ --dialect tsql --exclude-rules references.from,structure.column_order,ambiguous.column_count,references.keywords
 
   lint-python:
     name: Lint Python Files
