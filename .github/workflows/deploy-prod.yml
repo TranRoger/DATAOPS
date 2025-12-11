@@ -78,6 +78,10 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
+    - name: Create profiles.yml from secret
+      run: |
+        echo "${{ secrets.DBT_PROFILE }}" > dbt/profiles.yml
+
     - name: Create backup point
       run: |
         echo "💾 Creating pre-deployment backup reference..."
