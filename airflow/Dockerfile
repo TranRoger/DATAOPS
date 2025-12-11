@@ -29,7 +29,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Fix docker socket permission: create docker group with host GID and add airflow user
-RUN groupadd -g 957 docker || groupmod -g 957 docker \
+RUN groupadd -g 953 docker || groupmod -g 953 docker \
     && usermod -aG docker airflow
 
 # Change airflow user UID to match host user (for file permissions)
