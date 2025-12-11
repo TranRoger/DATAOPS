@@ -156,7 +156,7 @@ models:
       - name: ship_date
         description: "Actual shipment date - NULL for unshipped orders"
 
-      - name: status
+      - name: order_status
         description: "Order status code (1=In Process, 2=Approved, 3=Backordered, 4=Rejected, 5=Shipped, 6=Cancelled)"
         tests:
           - accepted_values:

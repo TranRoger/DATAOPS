@@ -7,7 +7,7 @@ on:
     branches: [ main, develop ]
 
 env:
-  DBT_PROFILES_DIR: ./dbt
+  DBT_PROFILES_DIR: ${{ github.workspace }}/dbt
 
 jobs:
   lint-sql:
@@ -70,6 +70,10 @@ jobs:
       run: |
         pip install dbt-sqlserver
 
+    - name: Create profiles.yml from secret
+      run: |
+        echo "${{ secrets.DBT_PROFILE }}" > dbt/profiles.yml
+
     - name: Install DBT dependencies
       run: |
         cd dbt
@@ -78,7 +82,7 @@ jobs:
     - name: Compile DBT models
       run: |
         cd dbt
-        dbt compile --profiles-dir .
+        dbt compile
 
     - name: Upload compiled artifacts
       uses: actions/upload-artifact@v4
@@ -105,6 +109,10 @@ jobs:
     - name: Install DBT
       run: pip install dbt-sqlserver==1.8.2
 
+    - name: Create profiles.yml from secret
+      run: |
+        echo "${{ secrets.DBT_PROFILE }}" > dbt/profiles.yml
+
     - name: Install dependencies
       run: |
         cd dbt
@@ -113,13 +121,13 @@ jobs:
     - name: Generate documentation
       run: |
         cd dbt
-        dbt docs generate --profiles-dir .
+        dbt docs generate
       continue-on-error: true
 
     - name: Upload documentation
       uses: actions/upload-artifact@v4
       with:
-        name: dbt-docs        cd dbt && sqlfluff lint models/
+        name: dbt-docs
         path: |
           dbt/target/catalog.json
           dbt/target/manifest.json

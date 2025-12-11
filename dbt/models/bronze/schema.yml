@@ -57,7 +57,7 @@ models:
       - name: ship_date
         description: "Ship date"
 
-      - name: status
+      - name: order_status
         description: "Order status"
         tests:
           - accepted_values:

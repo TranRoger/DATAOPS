@@ -5,7 +5,7 @@ with sales_order_header as (
         duedate as due_date,
         shipdate as ship_date,
         totaldue as total_due,
-        orderstatus as order_status,
+        [status] as order_status,
         onlineorderflag as online_order_flag,
         salesordernumber as sales_order_number,
         purchaseordernumber as purchase_order_number,
