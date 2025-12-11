@@ -1,7 +1,11 @@
 # DBT + Airflow + SQL Server DataOps Project
 
-![DBT CI](https://github.com/andyng195/dbt-airflow-dataops/workflows/DBT%20CI%20Pipeline/badge.svg)
-![Python Quality](https://github.com/andyng195/dbt-airflow-dataops/workflows/Python%20Code%20Quality/badge.svg)
+## CI/CD Status
+
+[![DBT CI](https://github.com/TranRoger/DATAOPS/workflows/DBT%20CI%20Pipeline/badge.svg)](https://github.com/TranRoger/DATAOPS/actions/workflows/dbt-ci.yml)
+[![Python Quality](https://github.com/TranRoger/DATAOPS/workflows/Python%20Code%20Quality/badge.svg)](https://github.com/TranRoger/DATAOPS/actions/workflows/python-quality.yml)
+[![Deploy Dev](https://github.com/TranRoger/DATAOPS/workflows/Deploy%20to%20Development/badge.svg)](https://github.com/TranRoger/DATAOPS/actions/workflows/deploy-dev.yml)
+[![Deploy Prod](https://github.com/TranRoger/DATAOPS/workflows/Deploy%20to%20Production/badge.svg)](https://github.com/TranRoger/DATAOPS/actions/workflows/deploy-prod.yml)
 
 ## Project Overview
 This project implements an automated data transformation pipeline using DBT (Data Build Tool) and Apache Airflow. The pipeline extracts data from SQL Server, transforms it using DBT models, and loads it into a target database, following modern data engineering best practices.
@@ -368,27 +372,125 @@ We use containers for several important reasons:
 
 5. **Portability**: The project can run on any system that supports Docker, regardless of the underlying OS or infrastructure.
 
+## CI/CD Pipeline
+
+This project implements a comprehensive CI/CD pipeline with automated testing, deployment, and monitoring.
+
+### Continuous Integration (CI)
+
+**Automated Checks on Every PR:**
+- ✅ SQL linting with SQLFluff
+- ✅ Python code quality (Black, Flake8, Pylint)
+- ✅ DBT model compilation
+- ✅ Pull request validation (title format, file size, conflicts)
+- ✅ Automated documentation generation
+
+**Workflows:**
+- `.github/workflows/dbt-ci.yml` - DBT compilation and SQL linting
+- `.github/workflows/python-quality.yml` - Python code quality checks
+- `.github/workflows/pr-check.yml` - PR validation
+
+### Continuous Deployment (CD)
+
+**Environment-Specific Deployments:**
+
+| Environment | Branch | Trigger | Approval | Workflow |
+|-------------|--------|---------|----------|----------|
+| **Development** | `develop` | Auto on push | No | `deploy-dev.yml` |
+| **Production** | `main` | Auto on push | Recommended | `deploy-prod.yml` |
+
+**Deployment Features:**
+- ✅ Pre-deployment validation checks
+- ✅ Automated DBT dependency installation
+- ✅ Model compilation and execution
+- ✅ Data quality test execution
+- ✅ Post-deployment health checks
+- ✅ Deployment artifacts and logs
+- ✅ Deployment summaries
+- ✅ Slack notifications (configurable)
+
+**Deployment Process:**
+```bash
+# Development
+git push origin develop  # Triggers automatic deployment
+
+# Production
+git push origin main     # Triggers automatic deployment
+```
+
+### Rollback Capability
+
+**Manual Rollback Workflow:**
+- Navigate to: Actions → "Manual Rollback" → "Run workflow"
+- Provide: Target commit SHA, Environment, Reason
+- Automated rollback execution with validation
+
+**See**: [DEPLOYMENT_RUNBOOK.md](./DEPLOYMENT_RUNBOOK.md) for detailed procedures
+
+### Monitoring & Notifications
+
+**Deployment Monitoring:**
+- Real-time workflow status in GitHub Actions
+- Deployment summaries with key metrics
+- Artifact retention (30 days for dev, 90 days for prod)
+- Deployment history tracking
+
+**Notifications:**
+- ✅ Slack webhooks for deployment status
+- ✅ GitHub Action summaries
+- ✅ Deployment record generation
+- ✅ Failure alerts with troubleshooting steps
+
+**Configuration:**
+```bash
+# Set Slack webhook (optional)
+export SLACK_WEBHOOK_URL="https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+
+# Or add to GitHub Secrets:
+# Repository → Settings → Secrets → New repository secret
+# Name: SLACK_WEBHOOK_URL
+# Value: <your-webhook-url>
+```
+
+### Deployment Documentation
+
+- **Runbook**: [DEPLOYMENT_RUNBOOK.md](./DEPLOYMENT_RUNBOOK.md) - Complete deployment procedures
+- **Rollback Guide**: Included in runbook
+- **Troubleshooting**: Common issues and solutions
+- **Best Practices**: Deployment windows, checklists, verification steps
+
 ## Best Practices
 
 1. **Version Control**
    - Keep all code in version control
-   - Use meaningful commit messages
-   - Create branches for new features
+   - Use meaningful commit messages following conventional commits format
+   - Create feature branches for new development
+   - Examples: `feat: add new model`, `fix: correct date calculation`
 
 2. **Testing**
    - Write tests for all DBT models
    - Test data quality and business logic
-   - Run tests before deploying changes
+   - Run tests locally before pushing: `dbt test`
+   - Ensure all CI checks pass before merging
 
 3. **Documentation**
    - Document all models and transformations
    - Keep README up to date
    - Use clear naming conventions
+   - Add column-level documentation in schema.yml files
 
 4. **Security**
    - Never commit sensitive credentials
    - Use environment variables for secrets
+   - Use GitHub Secrets for CI/CD credentials
    - Regularly update dependencies
+
+5. **Deployment**
+   - Always deploy to development first
+   - Verify changes in dev before promoting to prod
+   - Never deploy on Fridays or before holidays
+   - Have rollback plan ready for production deployments
+   - Follow deployment runbook procedures
 
 ## Troubleshooting
 

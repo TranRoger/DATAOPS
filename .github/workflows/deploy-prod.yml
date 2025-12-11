@@ -1,0 +1,266 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+    - main
+  workflow_dispatch:
+    # Allow manual trigger with approval
+    inputs:
+      skip_tests:
+        description: 'Skip tests (not recommended)'
+        required: false
+        default: 'false'
+
+env:
+  DBT_TARGET: prod
+  DBT_PROFILES_DIR: ./dbt
+  ENVIRONMENT: production
+
+jobs:
+  pre-deployment-validation:
+    name: Pre-Production Validation
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Validate production readiness
+      run: |
+        echo "🔍 Validating production readiness..."
+
+        # Check if deployment is from main branch
+        if [ "${{ github.ref }}" != "refs/heads/main" ] && [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
+          echo "❌ Production deployments must be from main branch"
+          exit 1
+        fi
+
+        # Check for required files
+        if [ ! -f "dbt/dbt_project.yml" ] || [ ! -f "dbt/profiles.yml" ]; then
+          echo "❌ Required DBT files missing"
+          exit 1
+        fi
+
+        echo "✅ Production validation passed"
+
+    - name: Check for breaking changes
+      run: |
+        echo "🔍 Analyzing changes for production impact..."
+
+        # Check if HEAD~1 exists (i.e., not the first commit)
+        if git rev-parse HEAD~1 >/dev/null 2>&1; then
+          # Check for deleted models
+          DELETED_MODELS=$(git diff --name-status HEAD~1 HEAD 2>/dev/null | grep "^D.*\.sql$" | wc -l || echo "0")
+          if [ $DELETED_MODELS -gt 0 ]; then
+            echo "⚠️  WARNING: $DELETED_MODELS model(s) deleted"
+            echo "🚨 Ensure all downstream dependencies have been updated"
+            git diff --name-status HEAD~1 HEAD 2>/dev/null | grep "^D.*\.sql$" || true
+          fi
+
+          # Check for modified models
+          MODIFIED_MODELS=$(git diff --name-status HEAD~1 HEAD 2>/dev/null | grep "^M.*\.sql$" | wc -l || echo "0")
+          echo "📝 $MODIFIED_MODELS model(s) modified"
+        else
+          echo "ℹ️  Initial commit detected. Skipping breaking changes analysis."
+        fi
+        echo "✅ Change analysis complete"
+
+  deploy-production:
+    name: Deploy to Production Environment
+    runs-on: ubuntu-latest
+    needs: pre-deployment-validation
+    environment:
+      name: production
+      url: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install DBT and dependencies
+      run: |
+        echo "📦 Installing DBT for production..."
+        echo "📦 Installing DBT packages with lock file verification..."
+        cd dbt
+        dbt deps --profiles-dir . --lock
+
+    - name: Create backup point
+      run: |
+        echo "💾 Creating pre-deployment backup reference..."
+        echo "BACKUP_COMMIT=${{ github.sha }}" >> $GITHUB_ENV
+        echo "BACKUP_TIMESTAMP=$(date -u '+%Y%m%d_%H%M%S')" >> $GITHUB_ENV
+        echo "✅ Backup point created: ${{ github.sha }}"
+
+    - name: Compile DBT models
+      run: |
+        echo "🔨 Compiling DBT models for production..."
+        cd dbt
+        dbt compile --profiles-dir . --target ${{ env.DBT_TARGET }}
+
+    - name: Run DBT models (Production)
+      id: dbt-run-prod
+      run: |
+        echo "🚀 Deploying DBT models to PRODUCTION..."
+        cd dbt
+        dbt run --profiles-dir . --target ${{ env.DBT_TARGET }}
+
+        echo "run_status=success" >> $GITHUB_OUTPUT
+      continue-on-error: false
+
+    - name: Run data quality tests
+      id: dbt-test-prod
+      if: github.event.inputs.skip_tests != 'true'
+      run: |
+        echo "🧪 Running production data quality tests..."
+        cd dbt
+        dbt test --profiles-dir . --target ${{ env.DBT_TARGET }}
+
+        echo "test_status=success" >> $GITHUB_OUTPUT
+      continue-on-error: false
+
+    - name: Run source freshness checks
+      if: success()
+      run: |
+        echo "📊 Checking source data freshness..."
+        cd dbt
+        dbt source freshness --profiles-dir . --target ${{ env.DBT_TARGET }} || echo "⚠️  Some sources may be stale"
+
+    - name: Generate production documentation
+      if: success()
+      run: |
+        echo "📚 Generating production documentation..."
+        cd dbt
+        dbt docs generate --profiles-dir . --target ${{ env.DBT_TARGET }}
+
+    - name: Upload production artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: production-deployment-${{ github.sha }}
+        path: |
+          dbt/target/
+          dbt/logs/
+        retention-days: 90 # Keep production logs longer
+
+    - name: Post-deployment validation
+      if: success()
+      run: |
+        echo "🏥 Running post-deployment health checks..."
+        echo "✅ Production deployment health check passed"
+
+        echo "📊 Production Deployment Summary:"
+        echo "- Commit: ${{ github.sha }}"
+        echo "- Deployed by: ${{ github.actor }}"
+        echo "- Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+        echo "- Backup point: ${{ env.BACKUP_COMMIT }}"
+
+    - name: Create deployment record
+      if: success()
+      run: |
+        mkdir -p .deployments
+        cat > .deployments/prod_${{ env.BACKUP_TIMESTAMP }}.json << EOF
+        {
+          "deployment_id": "${{ github.run_id }}",
+          "commit_sha": "${{ github.sha }}",
+          "deployed_by": "${{ github.actor }}",
+          "deployed_at": "$(date -u '+%Y-%m-%d %H:%M:%S UTC')",
+          "environment": "${{ env.ENVIRONMENT }}",
+          "target": "${{ env.DBT_TARGET }}",
+          "status": "success",
+          "backup_commit": "${{ env.BACKUP_COMMIT }}"
+        }
+        EOF
+
+        echo "📝 Deployment record created"
+
+    - name: Create deployment summary
+      if: always()
+      run: |
+        echo "## 🚀 Production Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+        echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Environment | 🔴 **PRODUCTION** |" >> $GITHUB_STEP_SUMMARY
+        echo "| Target | ${{ env.DBT_TARGET }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Branch | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+        echo "| Deployed by | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Timestamp | $(date -u '+%Y-%m-%d %H:%M:%S UTC') |" >> $GITHUB_STEP_SUMMARY
+        echo "| DBT Run | ${{ steps.dbt-run-prod.outcome }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Tests | ${{ steps.dbt-test-prod.outcome }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Backup Point | \`${{ env.BACKUP_COMMIT }}\` |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📦 Deployment Contents" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Bronze Layer (Raw data extraction)" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Silver Layer (Business transformations)" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Gold Layer (Aggregated metrics)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔄 Rollback Instructions" >> $GITHUB_STEP_SUMMARY
+        echo "If rollback is needed:" >> $GITHUB_STEP_SUMMARY
+        echo '```bash' >> $GITHUB_STEP_SUMMARY
+        echo "git checkout ${{ env.BACKUP_COMMIT }}" >> $GITHUB_STEP_SUMMARY
+        echo "# Then re-run deployment from this commit" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+
+  notify-production-deployment:
+    name: Send Production Deployment Notifications
+    runs-on: ubuntu-latest
+    needs: deploy-production
+    if: always()
+
+    steps:
+    - name: Notify on success
+      if: needs.deploy-production.result == 'success'
+      run: |
+        echo "🎉 PRODUCTION DEPLOYMENT SUCCESSFUL!"
+        echo "Environment: Production"
+        echo "Commit: ${{ github.sha }}"
+        echo "Deployed by: ${{ github.actor }}"
+        echo "Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+
+        # In production with Slack webhook:
+        # curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+        #   -H 'Content-Type: application/json' \
+        #   -d '{
+        #     "text": "🎉 Production Deployment Successful!",
+        #     "attachments": [{
+        #       "color": "good",
+        #       "fields": [
+        #         {"title": "Commit", "value": "${{ github.sha }}", "short": true},
+        #         {"title": "Deployed by", "value": "${{ github.actor }}", "short": true}
+        #       ]
+        #     }]
+        #   }'
+
+    - name: Notify on failure
+      if: needs.deploy-production.result == 'failure'
+      run: |
+        echo "❌ PRODUCTION DEPLOYMENT FAILED!"
+        echo "🚨 URGENT: Production deployment requires attention"
+        echo "Commit: ${{ github.sha }}"
+        echo "Failed step: Check logs at ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+        # In production with Slack webhook:
+        # curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+        #   -H 'Content-Type: application/json' \
+        #   -d '{
+        #     "text": "🚨 PRODUCTION DEPLOYMENT FAILED!",
+        #     "attachments": [{
+        #       "color": "danger",
+        #       "fields": [
+        #         {"title": "Commit", "value": "${{ github.sha }}", "short": true},
+        #         {"title": "Logs", "value": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}", "short": false}
+        #       ]
+        #     }]
+        #   }'

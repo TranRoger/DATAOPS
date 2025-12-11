@@ -1,42 +1,35 @@
-with product as (
-    select * from {{ source('adventureworks_production', 'Product') }}
-),
-
-product_subcategory as (
-    select * from {{ source('adventureworks_production', 'ProductSubcategory') }}
-),
-
-staged as (
+with staged as (
     select
-        p.ProductID,
-        p.Name as ProductName,
-        p.ProductNumber,
-        p.MakeFlag,
-        p.FinishedGoodsFlag,
-        p.Color,
-        p.SafetyStockLevel,
-        p.ReorderPoint,
-        p.StandardCost,
-        p.ListPrice,
-        p.Size,
-        p.SizeUnitMeasureCode,
-        p.WeightUnitMeasureCode,
-        p.Weight,
-        p.DaysToManufacture,
-        p.ProductLine,
-        p.Class,
-        p.Style,
-        p.ProductSubcategoryID,
-        p.ProductModelID,
-        p.SellStartDate,
-        p.SellEndDate,
-        p.DiscontinuedDate,
-        ps.Name as SubcategoryName,
-        ps.ProductCategoryID,
-        p.ModifiedDate as last_modified_date
-    from product p
-    left join product_subcategory ps
-        on p.ProductSubcategoryID = ps.ProductSubcategoryID
+        p.productid,
+        p.name as productname,
+        p.productnumber,
+        p.makeflag,
+        p.finishedgoodsflag,
+        p.color,
+        p.safetystocklevel,
+        p.reorderpoint,
+        p.standardcost,
+        p.listprice,
+        p.size,
+        p.sizeunitmeasurecode,
+        p.weightunitmeasurecode,
+        p.weight,
+        p.daystomanufacture,
+        p.productline,
+        p.[class] as productclass,
+        p.style,
+        p.productsubcategoryid,
+        p.productmodelid,
+        p.sellstartdate,
+        p.sellenddate,
+        p.discontinueddate,
+        ps.name as subcategoryname,
+        ps.productcategoryid,
+        p.modifieddate as last_modified_date
+    from {{ source('adventureworks_production', 'Product') }} as p
+    left join
+        {{ source('adventureworks_production', 'ProductSubcategory') }} as ps
+        on p.productsubcategoryid = ps.productsubcategoryid
 )
 
-select * from staged 
+select * from staged
