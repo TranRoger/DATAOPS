@@ -177,4 +177,4 @@ sqlserver/
 ├── backup/         # KEEP: Original backup files
 ├── data/          # DELETE: Runtime data
 └── logs/          # DELETE: Runtime logs
-``` 
+```

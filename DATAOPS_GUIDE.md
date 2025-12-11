@@ -150,20 +150,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
-      
+
       - name: Install SQLFluff
         run: pip install sqlfluff sqlfluff-templater-dbt
-      
+
       - name: Lint SQL files
         run: |
           cd dbt
           sqlfluff lint models/ --dialect tsql
-      
+
       - name: Lint Python files
         run: |
           pip install flake8
@@ -173,7 +173,7 @@ jobs:
     name: Run DBT Tests
     runs-on: ubuntu-latest
     needs: lint
-    
+
     services:
       sqlserver:
         image: mcr.microsoft.com/mssql/server:2019-latest
@@ -188,49 +188,49 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-    
+
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
-      
+
       - name: Install DBT
         run: |
           pip install dbt-sqlserver
-      
+
       - name: Setup test database
         run: |
           # Restore test database or create test data
           echo "Setting up test database..."
-      
+
       - name: DBT Debug
         run: |
           cd dbt
           dbt debug
-      
+
       - name: DBT Deps
         run: |
           cd dbt
           dbt deps
-      
+
       - name: DBT Run
         run: |
           cd dbt
           dbt run --target ci
-      
+
       - name: DBT Test
         run: |
           cd dbt
           dbt test --target ci
-      
+
       - name: Generate DBT Docs
         run: |
           cd dbt
           dbt docs generate
-      
+
       - name: Upload DBT Artifacts
         uses: actions/upload-artifact@v3
         with:
@@ -242,10 +242,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     if: github.ref == 'refs/heads/develop'
-    
+
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Deploy to Dev Environment
         run: |
           echo "Deploying to development..."
@@ -256,15 +256,15 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     if: github.ref == 'refs/heads/main'
-    
+
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Deploy to Production
         run: |
           echo "Deploying to production..."
           # Add deployment commands here
-      
+
       - name: Notify Team
         run: |
           echo "Sending deployment notification..."
@@ -286,7 +286,7 @@ repos:
       - id: check-yaml
       - id: check-added-large-files
       - id: check-merge-conflict
-  
+
   - repo: https://github.com/sqlfluff/sqlfluff
     rev: 2.3.0
     hooks:
@@ -296,14 +296,14 @@ repos:
       - id: sqlfluff-fix
         args: [--dialect, tsql]
         files: \.sql$
-  
+
   - repo: https://github.com/psf/black
     rev: 23.7.0
     hooks:
       - id: black
         language_version: python3.9
         files: \.py$
-  
+
   - repo: https://github.com/pycqa/flake8
     rev: 6.1.0
     hooks:
@@ -355,14 +355,14 @@ models:
           - not_null
           - dbt_expectations.expect_column_values_to_be_of_type:
               column_type: integer
-      
+
       - name: email
         tests:
           - unique
           - not_null
           - dbt_expectations.expect_column_values_to_match_regex:
               regex: "^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$"
-      
+
       - name: created_date
         tests:
           - not_null
@@ -383,14 +383,14 @@ models:
           - relationships:
               to: ref('stg_customers')
               field: customer_id
-      
+
       - name: lifetime_value
         tests:
           - not_null
           - dbt_expectations.expect_column_values_to_be_between:
               min_value: 0
               max_value: 1000000
-      
+
       - name: customer_segment
         tests:
           - accepted_values:
@@ -459,14 +459,14 @@ sources:
   - name: adventureworks
     database: AdventureWorks2014
     schema: Sales
-    
+
     # Freshness configuration
     freshness:
       warn_after: {count: 12, period: hour}
       error_after: {count: 24, period: hour}
-    
+
     loaded_at_field: ModifiedDate
-    
+
     tables:
       - name: Customer
         description: "Customer master data"
@@ -478,7 +478,7 @@ sources:
             tests:
               - unique
               - not_null
-      
+
       - name: SalesOrderHeader
         description: "Sales order transactions"
         freshness:
@@ -525,20 +525,20 @@ def test_all_models_have_tests():
     """Test that all models have at least one test"""
     result = run_dbt_command("ls --resource-type model --output json")
     models = json.loads(result.stdout)
-    
+
     result = run_dbt_command("ls --resource-type test --output json")
     tests = json.loads(result.stdout)
-    
+
     tested_models = set([t['depends_on']['nodes'][0] for t in tests])
     untested_models = [m for m in models if m['unique_id'] not in tested_models]
-    
+
     assert len(untested_models) == 0, f"Models without tests: {untested_models}"
 
 def test_no_orphaned_models():
     """Test that all models are used somewhere"""
     result = run_dbt_command("ls --resource-type model --output json")
     models = json.loads(result.stdout)
-    
+
     # Check if models are referenced
     for model in models:
         if model['config']['materialized'] != 'ephemeral':
@@ -549,11 +549,11 @@ def test_model_naming_conventions():
     """Test that models follow naming conventions"""
     result = run_dbt_command("ls --resource-type model --output json")
     models = json.loads(result.stdout)
-    
+
     for model in models:
         name = model['name']
         path = model['original_file_path']
-        
+
         if 'staging' in path:
             assert name.startswith('stg_'), f"Staging model {name} should start with 'stg_'"
         elif 'intermediate' in path:
@@ -603,29 +603,29 @@ dag = DAG(
 def check_dbt_run_results(**context):
     """Check DBT run results for failures"""
     results_path = '/opt/airflow/dbt/target/run_results.json'
-    
+
     if not os.path.exists(results_path):
         raise FileNotFoundError("DBT run results not found")
-    
+
     with open(results_path, 'r') as f:
         results = json.load(f)
-    
+
     failed_models = [
-        r['unique_id'] 
-        for r in results['results'] 
+        r['unique_id']
+        for r in results['results']
         if r['status'] == 'error'
     ]
-    
+
     if failed_models:
         raise Exception(f"DBT models failed: {failed_models}")
-    
+
     # Log metrics
     total_models = len(results['results'])
     execution_time = results['elapsed_time']
-    
+
     print(f"Total models: {total_models}")
     print(f"Execution time: {execution_time}s")
-    
+
     return {
         'total_models': total_models,
         'execution_time': execution_time,
@@ -635,36 +635,36 @@ def check_dbt_run_results(**context):
 def check_data_freshness(**context):
     """Check source data freshness"""
     freshness_path = '/opt/airflow/dbt/target/sources.json'
-    
+
     if not os.path.exists(freshness_path):
         print("No freshness data available")
         return
-    
+
     with open(freshness_path, 'r') as f:
         sources = json.load(f)
-    
+
     stale_sources = [
         s['unique_id']
         for s in sources['results']
         if s['status'] == 'error'
     ]
-    
+
     if stale_sources:
         raise Exception(f"Stale data sources: {stale_sources}")
 
 def check_test_results(**context):
     """Check DBT test results"""
     results_path = '/opt/airflow/dbt/target/run_results.json'
-    
+
     with open(results_path, 'r') as f:
         results = json.load(f)
-    
+
     failed_tests = [
         r['unique_id']
         for r in results['results']
         if r['status'] == 'fail' and r['resource_type'] == 'test'
     ]
-    
+
     if failed_tests:
         raise Exception(f"DBT tests failed: {failed_tests}")
 
@@ -706,11 +706,11 @@ scrape_configs:
     static_configs:
       - targets: ['airflow-webserver:8080']
     metrics_path: '/admin/metrics'
-  
+
   - job_name: 'sqlserver'
     static_configs:
       - targets: ['sqlserver:1433']
-  
+
   - job_name: 'dbt_metrics'
     static_configs:
       - targets: ['dbt-exporter:9090']
@@ -733,15 +733,15 @@ dbt_test_failures = Counter('dbt_test_failures_total', 'Total DBT test failures'
 def collect_dbt_metrics():
     """Collect metrics from DBT artifacts"""
     results_path = '/opt/airflow/dbt/target/run_results.json'
-    
+
     if os.path.exists(results_path):
         with open(results_path, 'r') as f:
             results = json.load(f)
-        
+
         # Update metrics
         dbt_models_total.set(len(results['results']))
         dbt_execution_time.set(results['elapsed_time'])
-        
+
         for result in results['results']:
             if result['status'] == 'error':
                 if result['resource_type'] == 'model':
@@ -752,7 +752,7 @@ def collect_dbt_metrics():
 if __name__ == '__main__':
     # Start metrics server
     start_http_server(9090)
-    
+
     # Collect metrics every 60 seconds
     while True:
         collect_dbt_metrics()
@@ -865,7 +865,7 @@ groups:
         annotations:
           summary: "DBT model failed"
           description: "One or more DBT models have failed in the last 5 minutes"
-      
+
       - alert: DBTTestFailure
         expr: increase(dbt_test_failures_total[5m]) > 0
         for: 1m
@@ -874,7 +874,7 @@ groups:
         annotations:
           summary: "DBT test failed"
           description: "One or more DBT tests have failed"
-      
+
       - alert: DBTExecutionTimeSlow
         expr: dbt_execution_time_seconds > 3600
         for: 5m
@@ -883,7 +883,7 @@ groups:
         annotations:
           summary: "DBT execution is slow"
           description: "DBT execution time exceeded 1 hour"
-      
+
       - alert: AirflowDAGFailure
         expr: airflow_dag_run_failed > 0
         for: 1m
@@ -892,7 +892,7 @@ groups:
         annotations:
           summary: "Airflow DAG failed"
           description: "Airflow DAG {{ $labels.dag_id }} has failed"
-      
+
       - alert: DataFreshness
         expr: dbt_source_freshness_error > 0
         for: 5m
@@ -1025,10 +1025,10 @@ def run_ge_checkpoint(checkpoint_name):
     """Run Great Expectations checkpoint"""
     context = ge.data_context.DataContext()
     result = context.run_checkpoint(checkpoint_name=checkpoint_name)
-    
+
     if not result["success"]:
         raise Exception(f"Data quality check failed: {checkpoint_name}")
-    
+
     return result
 
 check_customers = PythonOperator(
@@ -1138,14 +1138,14 @@ Added Docker installation steps for Windows users
 
 ## Changes Made
 <!-- List the specific changes -->
-- 
-- 
-- 
+-
+-
+-
 
 ## Models Affected
 <!-- List DBT models that are new or modified -->
-- 
-- 
+-
+-
 
 ## Testing
 - [ ] All DBT tests pass locally
@@ -1193,7 +1193,7 @@ adventureworks:
       user: sa
       password: "{{ env_var('DBT_DEV_PASSWORD') }}"
       threads: 4
-    
+
     ci:
       type: sqlserver
       driver: 'ODBC Driver 17 for SQL Server'
@@ -1204,7 +1204,7 @@ adventureworks:
       user: sa
       password: "{{ env_var('DBT_CI_PASSWORD') }}"
       threads: 2
-    
+
     staging:
       type: sqlserver
       driver: 'ODBC Driver 17 for SQL Server'
@@ -1215,7 +1215,7 @@ adventureworks:
       user: "{{ env_var('DBT_STAGING_USER') }}"
       password: "{{ env_var('DBT_STAGING_PASSWORD') }}"
       threads: 8
-    
+
     prod:
       type: sqlserver
       driver: 'ODBC Driver 17 for SQL Server'
@@ -1444,7 +1444,7 @@ python scripts/smoke_tests.py --schema blue
 echo "Switching traffic to blue..."
 sqlcmd -S $SQL_SERVER -U $SQL_USER -P $SQL_PASSWORD -Q "
     -- Update views to point to blue schema
-    ALTER VIEW customer_analytics AS 
+    ALTER VIEW customer_analytics AS
     SELECT * FROM marts_blue.customer_analytics;
 "
 
@@ -1462,7 +1462,7 @@ if [ $? -eq 0 ]; then
 else
     echo "❌ Deployment failed! Rolling back to green..."
     sqlcmd -S $SQL_SERVER -U $SQL_USER -P $SQL_PASSWORD -Q "
-        ALTER VIEW customer_analytics AS 
+        ALTER VIEW customer_analytics AS
         SELECT * FROM marts_green.customer_analytics;
     "
     exit 1
@@ -1500,7 +1500,7 @@ dbt docs generate
 
 # 4. Check source data
 sqlcmd -S localhost -U sa -P "YourStrong@Passw0rd" -Q "
-    SELECT TOP 100 * FROM Sales.Customer 
+    SELECT TOP 100 * FROM Sales.Customer
     ORDER BY ModifiedDate DESC;
 "
 
@@ -1557,9 +1557,9 @@ docker-compose restart dbt
 **Status:** Resolved/Investigating/Monitoring
 
 ## Impact
-- **Users Affected:** 
-- **Data Affected:** 
-- **Business Impact:** 
+- **Users Affected:**
+- **Data Affected:**
+- **Business Impact:**
 
 ## Timeline
 - **HH:MM** - Issue detected

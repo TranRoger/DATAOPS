@@ -154,4 +154,4 @@ docker-compose logs [service_name]
 
 # Rebuild a specific service
 docker-compose build [service_name]
-``` 
+```

@@ -98,7 +98,7 @@ This project implements a data transformation pipeline using DBT (Data Build Too
 
 ## Volume Mounts
 
-- **SQL Server**: 
+- **SQL Server**:
   - `sqlserver_data:/var/opt/mssql` (persistent data)
 
 - **PostgreSQL**:
@@ -140,4 +140,4 @@ This project implements a data transformation pipeline using DBT (Data Build Too
 2. Test transformations using DBT commands
 3. Create or modify Airflow DAGs to orchestrate the transformations
 4. Deploy changes by rebuilding containers
-5. Monitor execution through Airflow UI 
+5. Monitor execution through Airflow UI

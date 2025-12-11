@@ -980,7 +980,7 @@ services:
       - ./html:/usr/share/nginx/html
     networks:
       - app-network
-  
+
   database:
     image: postgres:13
     environment:
@@ -1387,22 +1387,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      
+
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
           python-version: 3.9
-      
+
       - name: Install DBT
         run: pip install dbt-sqlserver
-      
+
       - name: Run DBT Tests
         run: |
           cd dbt
           dbt deps
           dbt run --target dev
           dbt test
-      
+
       - name: Generate Docs
         run: dbt docs generate
 ```

@@ -202,4 +202,4 @@ dbt_dag.py → Airflow Scheduler → DBT Execution
 4. **Security**:
    - Never commit sensitive credentials
    - Use environment variables
-   - Follow security best practices 
+   - Follow security best practices
