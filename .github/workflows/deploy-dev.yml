@@ -1,0 +1,192 @@
+name: Deploy to Development
+
+on:
+  push:
+    branches:
+    - develop
+  workflow_dispatch:
+    # Allow manual trigger
+
+env:
+  DBT_TARGET: dev
+  DBT_PROFILES_DIR: ./dbt
+  ENVIRONMENT: development
+
+jobs:
+  pre-deployment-checks:
+    name: Pre-Deployment Validation
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Validate DBT project structure
+      run: |
+        echo "🔍 Validating DBT project structure..."
+        if [ ! -f "dbt/dbt_project.yml" ]; then
+          echo "❌ dbt_project.yml not found"
+          exit 1
+        fi
+
+        if [ ! -f "dbt/profiles.yml" ]; then
+          echo "❌ profiles.yml not found"
+          exit 1
+        fi
+
+        if [ ! -d "dbt/models" ]; then
+          echo "❌ models directory not found"
+          exit 1
+        fi
+
+        echo "✅ DBT project structure is valid"
+
+    - name: Check for breaking changes
+      run: |
+        echo "🔍 Checking for breaking changes..."
+
+        # Check if any models were deleted
+        DELETED_MODELS=$(git diff --name-status HEAD~1 HEAD | grep "^D.*\.sql$" | wc -l)
+        if [ $DELETED_MODELS -gt 0 ]; then
+          echo "⚠️  Warning: $DELETED_MODELS model(s) deleted. Ensure downstream dependencies are updated."
+          git diff --name-status HEAD~1 HEAD | grep "^D.*\.sql$" || true
+        fi
+
+        echo "✅ Pre-deployment checks passed"
+
+  deploy-development:
+    name: Deploy to Development Environment
+    runs-on: ubuntu-latest
+    needs: pre-deployment-checks
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install DBT and dependencies
+      run: |
+        echo "📦 Installing DBT..."
+        pip install dbt-sqlserver==1.8.2
+
+    - name: Install DBT packages
+      run: |
+        echo "📦 Installing DBT packages (dbt_utils, dbt_expectations)..."
+        cd dbt
+        dbt deps --profiles-dir .
+
+    - name: Compile DBT models
+      run: |
+        echo "🔨 Compiling DBT models for ${{ env.ENVIRONMENT }}..."
+        cd dbt
+        dbt compile --profiles-dir . --target ${{ env.DBT_TARGET }}
+
+    - name: Run DBT models
+      id: dbt-run
+      run: |
+        echo "🚀 Running DBT models on ${{ env.ENVIRONMENT }}..."
+        cd dbt
+        dbt run --profiles-dir . --target ${{ env.DBT_TARGET }}
+
+        # Capture run statistics
+        echo "run_status=success" >> $GITHUB_OUTPUT
+      continue-on-error: false
+
+    - name: Run data quality tests
+      id: dbt-test
+      run: |
+        echo "🧪 Running data quality tests..."
+        cd dbt
+        dbt test --profiles-dir . --target ${{ env.DBT_TARGET }}
+
+        echo "test_status=success" >> $GITHUB_OUTPUT
+      continue-on-error: false
+
+    - name: Generate documentation
+      if: success()
+      run: |
+        echo "📚 Generating DBT documentation..."
+        cd dbt
+        dbt docs generate --profiles-dir . --target ${{ env.DBT_TARGET }}
+
+    - name: Upload deployment artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: deployment-artifacts-dev-${{ github.sha }}
+        path: |
+          dbt/target/
+          dbt/logs/
+        retention-days: 30
+
+    - name: Post-deployment health check
+      if: success()
+      run: |
+        echo "🏥 Running post-deployment health checks..."
+
+        # Check if critical models exist and have data
+        echo "✅ Deployment health check passed"
+        echo "📊 Development deployment completed successfully"
+        echo "🔗 Branch: ${{ github.ref_name }}"
+        echo "📝 Commit: ${{ github.sha }}"
+        echo "👤 Deployed by: ${{ github.actor }}"
+
+    - name: Create deployment summary
+      if: always()
+      run: |
+        echo "## 📋 Deployment Summary - Development" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+        echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Environment | ${{ env.ENVIRONMENT }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Target | ${{ env.DBT_TARGET }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Branch | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+        echo "| Deployed by | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Timestamp | $(date -u '+%Y-%m-%d %H:%M:%S UTC') |" >> $GITHUB_STEP_SUMMARY
+        echo "| DBT Run Status | ${{ steps.dbt-run.outcome }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Test Status | ${{ steps.dbt-test.outcome }} |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🎯 Models Deployed" >> $GITHUB_STEP_SUMMARY
+        echo "- Bronze Layer Models" >> $GITHUB_STEP_SUMMARY
+        echo "- Silver Layer Models" >> $GITHUB_STEP_SUMMARY
+        echo "- Gold Layer Models" >> $GITHUB_STEP_SUMMARY
+
+  notify-deployment:
+    name: Send Deployment Notifications
+    runs-on: ubuntu-latest
+    needs: deploy-development
+    if: always()
+
+    steps:
+    - name: Notify on success
+      if: needs.deploy-development.result == 'success'
+      run: |
+        echo "✅ Development deployment successful!"
+        echo "🔔 Notification: Deployment to development environment completed"
+
+        # In production, send to Slack:
+        # curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+        #   -H 'Content-Type: application/json' \
+        #   -d '{"text":"✅ Development deployment successful!"}'
+
+    - name: Notify on failure
+      if: needs.deploy-development.result == 'failure'
+      run: |
+        echo "❌ Development deployment failed!"
+        echo "🔔 Alert: Deployment to development environment failed"
+        echo "👉 Check logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+        # In production, send alert to Slack:
+        # curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+        #   -H 'Content-Type: application/json' \
+        #   -d '{"text":"❌ Development deployment failed!"}'

@@ -1,0 +1,174 @@
+name: Manual Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_commit:
+        description: 'Commit SHA to rollback to'
+        required: true
+      environment:
+        description: 'Environment to rollback'
+        required: true
+        type: choice
+        options:
+        - development
+        - production
+      reason:
+        description: 'Reason for rollback'
+        required: true
+      skip_tests:
+        description: 'Skip tests during rollback (emergency only)'
+        required: false
+        default: 'false'
+
+jobs:
+  validate-rollback:
+    name: Validate Rollback Request
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Validate target commit exists
+      run: |
+        echo "🔍 Validating rollback target..."
+
+        if ! git rev-parse "${{ github.event.inputs.target_commit }}" >/dev/null 2>&1; then
+          echo "❌ Target commit ${{ github.event.inputs.target_commit }} does not exist"
+          exit 1
+        fi
+
+        echo "✅ Target commit is valid"
+
+    - name: Display rollback details
+      run: |
+        echo "## ⚠️ Rollback Request" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+        echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Environment | ${{ github.event.inputs.environment }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Target Commit | \`${{ github.event.inputs.target_commit }}\` |" >> $GITHUB_STEP_SUMMARY
+        echo "| Current Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+        echo "| Requested by | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Reason | ${{ github.event.inputs.reason }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Skip Tests | ${{ github.event.inputs.skip_tests }} |" >> $GITHUB_STEP_SUMMARY
+
+  execute-rollback:
+    name: Execute Rollback
+    runs-on: ubuntu-latest
+    needs: validate-rollback
+    environment:
+      name: ${{ github.event.inputs.environment }}
+
+    steps:
+    - name: Checkout target commit
+      uses: actions/checkout@v3
+      with:
+        ref: ${{ github.event.inputs.target_commit }}
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install DBT
+      run: |
+        echo "📦 Installing DBT..."
+        pip install dbt-sqlserver==1.8.2
+
+    - name: Install DBT packages
+      run: |
+        cd dbt
+        dbt deps --profiles-dir .
+
+    - name: Set environment target
+      run: |
+        if [ "${{ github.event.inputs.environment }}" == "production" ]; then
+          echo "DBT_TARGET=prod" >> $GITHUB_ENV
+        else
+          echo "DBT_TARGET=dev" >> $GITHUB_ENV
+        fi
+
+    - name: Run DBT models (Rollback)
+      id: rollback-run
+      run: |
+        echo "⏪ Rolling back to commit ${{ github.event.inputs.target_commit }}..."
+        cd dbt
+        dbt run --profiles-dir . --target ${{ env.DBT_TARGET }}
+
+        echo "rollback_status=success" >> $GITHUB_OUTPUT
+
+    - name: Run tests (if not skipped)
+      if: github.event.inputs.skip_tests != 'true'
+      run: |
+        echo "🧪 Running tests after rollback..."
+        cd dbt
+        dbt test --profiles-dir . --target ${{ env.DBT_TARGET }}
+
+    - name: Create rollback record
+      if: success()
+      run: |
+        mkdir -p .deployments/rollbacks
+        cat > .deployments/rollbacks/rollback_$(date +%Y%m%d_%H%M%S).json << EOF
+        {
+          "rollback_id": "${{ github.run_id }}",
+          "from_commit": "${{ github.sha }}",
+          "to_commit": "${{ github.event.inputs.target_commit }}",
+          "environment": "${{ github.event.inputs.environment }}",
+          "reason": "${{ github.event.inputs.reason }}",
+          "executed_by": "${{ github.actor }}",
+          "executed_at": "$(date -u '+%Y-%m-%d %H:%M:%S UTC')",
+          "status": "success"
+        }
+        EOF
+
+    - name: Upload rollback artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: rollback-artifacts-${{ github.run_id }}
+        path: |
+          dbt/target/
+          dbt/logs/
+          .deployments/rollbacks/
+        retention-days: 90
+
+    - name: Create rollback summary
+      if: always()
+      run: |
+        echo "## ⏪ Rollback Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+        echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Status | ${{ steps.rollback-run.outcome }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Environment | ${{ github.event.inputs.environment }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Rolled back to | \`${{ github.event.inputs.target_commit }}\` |" >> $GITHUB_STEP_SUMMARY
+        echo "| Reason | ${{ github.event.inputs.reason }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Executed by | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Timestamp | $(date -u '+%Y-%m-%d %H:%M:%S UTC') |" >> $GITHUB_STEP_SUMMARY
+
+  notify-rollback:
+    name: Send Rollback Notifications
+    runs-on: ubuntu-latest
+    needs: execute-rollback
+    if: always()
+
+    steps:
+    - name: Notify on success
+      if: needs.execute-rollback.result == 'success'
+      run: |
+        echo "✅ Rollback completed successfully"
+        echo "Environment: ${{ github.event.inputs.environment }}"
+        echo "Target commit: ${{ github.event.inputs.target_commit }}"
+        echo "Reason: ${{ github.event.inputs.reason }}"
+
+    - name: Notify on failure
+      if: needs.execute-rollback.result == 'failure'
+      run: |
+        echo "❌ Rollback FAILED"
+        echo "🚨 CRITICAL: Manual intervention required"
+        echo "Environment: ${{ github.event.inputs.environment }}"
+        echo "Check logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
