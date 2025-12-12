@@ -72,96 +72,40 @@ jobs:
           sleep 5
         done
 
-    - name: Setup database and user
+    - name: Download and restore AdventureWorks database
       run: |
-        echo "🔧 Creating database and user for DBT..."
+        echo "📥 Downloading AdventureWorks2014 backup..."
+        curl -L -o /tmp/AdventureWorks2014.bak "https://github.com/Microsoft/sql-server-samples/releases/download/adventureworks/AdventureWorks2014.bak"
+
+        echo "🔄 Restoring AdventureWorks2014 database..."
         /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -Q "
-          CREATE DATABASE AdventureWorks2014;
-          GO
-          USE AdventureWorks2014;
-          GO
-          CREATE LOGIN dbt_user WITH PASSWORD = 'DbtUser@12345';
-          GO
-          CREATE USER dbt_user FOR LOGIN dbt_user;
-          GO
-          ALTER ROLE db_owner ADD MEMBER dbt_user;
-          GO
-          -- Create schemas for medallion architecture
-          CREATE SCHEMA bronze;
-          GO
-          CREATE SCHEMA silver;
-          GO
-          CREATE SCHEMA gold;
-          GO
-          CREATE SCHEMA dbo_dev;
-          GO
-          -- Grant permissions
-          GRANT CREATE TABLE TO dbt_user;
-          GRANT CREATE VIEW TO dbt_user;
-          GO
+          RESTORE DATABASE AdventureWorks2014
+          FROM DISK = '/tmp/AdventureWorks2014.bak'
+          WITH MOVE 'AdventureWorks2014_Data' TO '/var/opt/mssql/data/AdventureWorks2014.mdf',
+               MOVE 'AdventureWorks2014_Log' TO '/var/opt/mssql/data/AdventureWorks2014_log.ldf',
+               REPLACE;
         "
-        echo "✅ Database and user created successfully"
+        echo "✅ AdventureWorks2014 database restored successfully"
 
-    - name: Create source tables for DBT
+    - name: Setup DBT user and schemas
       run: |
-        echo "📊 Creating source tables..."
+        echo "🔧 Creating DBT user and schemas..."
         /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -d AdventureWorks2014 -Q "
-          -- Create Sales schema
-          IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'Sales')
-            EXEC('CREATE SCHEMA Sales');
-          GO
+          CREATE LOGIN dbt_user WITH PASSWORD = 'DbtUser@12345';
+          CREATE USER dbt_user FOR LOGIN dbt_user;
+          ALTER ROLE db_owner ADD MEMBER dbt_user;
 
-          -- Create sample SalesOrderHeader table
-          CREATE TABLE Sales.SalesOrderHeader (
-            SalesOrderID INT PRIMARY KEY IDENTITY(1,1),
-            OrderDate DATETIME DEFAULT GETDATE(),
-            DueDate DATETIME,
-            ShipDate DATETIME,
-            Status TINYINT DEFAULT 1,
-            CustomerID INT,
-            TotalDue MONEY,
-            ModifiedDate DATETIME DEFAULT GETDATE()
-          );
-          GO
-
-          -- Create sample SalesOrderDetail table
-          CREATE TABLE Sales.SalesOrderDetail (
-            SalesOrderDetailID INT PRIMARY KEY IDENTITY(1,1),
-            SalesOrderID INT,
-            ProductID INT,
-            OrderQty SMALLINT,
-            UnitPrice MONEY,
-            LineTotal AS (OrderQty * UnitPrice),
-            ModifiedDate DATETIME DEFAULT GETDATE()
-          );
-          GO
-
-          -- Create sample Customer table
-          CREATE TABLE Sales.Customer (
-            CustomerID INT PRIMARY KEY IDENTITY(1,1),
-            PersonID INT,
-            StoreID INT,
-            AccountNumber VARCHAR(20),
-            ModifiedDate DATETIME DEFAULT GETDATE()
-          );
-          GO
-
-          -- Insert sample data
-          INSERT INTO Sales.Customer (PersonID, StoreID, AccountNumber)
-          VALUES (1, 100, 'AW00000001'), (2, 101, 'AW00000002'), (3, 102, 'AW00000003');
-
-          INSERT INTO Sales.SalesOrderHeader (OrderDate, DueDate, ShipDate, CustomerID, TotalDue)
-          VALUES
-            (GETDATE(), DATEADD(day, 7, GETDATE()), DATEADD(day, 3, GETDATE()), 1, 1500.00),
-            (GETDATE(), DATEADD(day, 7, GETDATE()), DATEADD(day, 3, GETDATE()), 2, 2500.00),
-            (GETDATE(), DATEADD(day, 7, GETDATE()), NULL, 3, 3500.00);
-
-          INSERT INTO Sales.SalesOrderDetail (SalesOrderID, ProductID, OrderQty, UnitPrice)
-          VALUES (1, 101, 2, 750.00), (2, 102, 5, 500.00), (3, 103, 7, 500.00);
-
-          PRINT 'Sample data inserted successfully';
+          -- Create schemas for medallion architecture
+          IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'bronze')
+            EXEC('CREATE SCHEMA bronze');
+          IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'silver')
+            EXEC('CREATE SCHEMA silver');
+          IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'gold')
+            EXEC('CREATE SCHEMA gold');
+          IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'dbo_dev')
+            EXEC('CREATE SCHEMA dbo_dev');
         "
-        echo "✅ Source tables created with sample data"
+        echo "✅ DBT user and schemas created successfully"
 
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -245,7 +189,7 @@ jobs:
         sudo apt-get update
         sudo ACCEPT_EULA=Y apt-get install -y mssql-tools18 unixodbc-dev
 
-    - name: Wait for SQL Server and setup database
+    - name: Download and restore AdventureWorks database
       run: |
         echo "⏳ Waiting for SQL Server..."
         for i in {1..30}; do
@@ -256,10 +200,21 @@ jobs:
           sleep 5
         done
 
-        echo "🔧 Setting up database..."
+        echo "📥 Downloading AdventureWorks2014 backup..."
+        mkdir -p /tmp/backup
+        curl -L -o /tmp/backup/AdventureWorks2014.bak \
+          "https://github.com/Microsoft/sql-server-samples/releases/download/adventureworks/AdventureWorks2014.bak"
+
+        echo "🔧 Restoring AdventureWorks2014 database..."
         /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -Q "
-          CREATE DATABASE AdventureWorks2014;
+          RESTORE DATABASE AdventureWorks2014
+          FROM DISK = '/tmp/backup/AdventureWorks2014.bak'
+          WITH MOVE 'AdventureWorks2014_Data' TO '/var/opt/mssql/data/AdventureWorks2014.mdf',
+               MOVE 'AdventureWorks2014_Log' TO '/var/opt/mssql/data/AdventureWorks2014_log.ldf',
+               REPLACE;
         "
+
+        echo "👤 Creating DBT user and schemas..."
         /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -d AdventureWorks2014 -Q "
           CREATE LOGIN dbt_user WITH PASSWORD = 'DbtUser@12345';
           CREATE USER dbt_user FOR LOGIN dbt_user;
@@ -269,49 +224,7 @@ jobs:
           CREATE SCHEMA gold;
           CREATE SCHEMA dbo_dev;
         "
-
-        echo "📊 Creating source tables..."
-        /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -d AdventureWorks2014 -Q "
-          CREATE SCHEMA Sales;
-        "
-        /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -d AdventureWorks2014 -Q "
-          CREATE TABLE Sales.SalesOrderHeader (
-            SalesOrderID INT PRIMARY KEY IDENTITY(1,1),
-            OrderDate DATETIME DEFAULT GETDATE(),
-            DueDate DATETIME,
-            ShipDate DATETIME,
-            Status TINYINT DEFAULT 1,
-            CustomerID INT,
-            TotalDue MONEY,
-            ModifiedDate DATETIME DEFAULT GETDATE()
-          );
-          CREATE TABLE Sales.SalesOrderDetail (
-            SalesOrderDetailID INT PRIMARY KEY IDENTITY(1,1),
-            SalesOrderID INT,
-            ProductID INT,
-            OrderQty SMALLINT,
-            UnitPrice MONEY,
-            LineTotal AS (OrderQty * UnitPrice),
-            ModifiedDate DATETIME DEFAULT GETDATE()
-          );
-          CREATE TABLE Sales.Customer (
-            CustomerID INT PRIMARY KEY IDENTITY(1,1),
-            PersonID INT,
-            StoreID INT,
-            AccountNumber VARCHAR(20),
-            ModifiedDate DATETIME DEFAULT GETDATE()
-          );
-          INSERT INTO Sales.Customer (PersonID, StoreID, AccountNumber)
-          VALUES (1, 100, 'AW00000001'), (2, 101, 'AW00000002'), (3, 102, 'AW00000003');
-          INSERT INTO Sales.SalesOrderHeader (OrderDate, DueDate, ShipDate, CustomerID, TotalDue)
-          VALUES
-            (GETDATE(), DATEADD(day, 7, GETDATE()), DATEADD(day, 3, GETDATE()), 1, 1500.00),
-            (GETDATE(), DATEADD(day, 7, GETDATE()), DATEADD(day, 3, GETDATE()), 2, 2500.00),
-            (GETDATE(), DATEADD(day, 7, GETDATE()), NULL, 3, 3500.00);
-          INSERT INTO Sales.SalesOrderDetail (SalesOrderID, ProductID, OrderQty, UnitPrice)
-          VALUES (1, 101, 2, 750.00), (2, 102, 5, 500.00), (3, 103, 7, 500.00);
-        "
-        echo "✅ Database setup complete"
+        echo "✅ Database restore complete"
 
     - name: Set up Python
       uses: actions/setup-python@v4
