@@ -108,14 +108,38 @@ jobs:
             STATS = 10;
         "
 
-        echo "👤 Creating database users..."
-        /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -d AdventureWorks2014 -Q "
-          CREATE LOGIN imrandbtnew WITH PASSWORD = '${{ env.DBT_PASSWORD }}';
-          CREATE USER imrandbtnew FOR LOGIN imrandbtnew;
-          ALTER ROLE db_owner ADD MEMBER imrandbtnew;
-        "
+        echo "👤 Creating DBT user and schemas..."
+        # Added -b flag to force exit on error
+        /opt/mssql-tools18/bin/sqlcmd -b -S localhost -U sa -P "$SA_PASSWORD" -C -d AdventureWorks2014 -Q "
+          -- Create dbt_user if not exists
+          IF NOT EXISTS (SELECT * FROM sys.server_principals WHERE name = 'dbt_user')
+          BEGIN
+            CREATE LOGIN dbt_user WITH PASSWORD = '${{ env.DBT_PASSWORD }}';
+          END
 
-        echo "✅ AdventureWorks2014 database restored successfully"
+          IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'dbt_user')
+          BEGIN
+            CREATE USER dbt_user FOR LOGIN dbt_user;
+            ALTER ROLE db_owner ADD MEMBER dbt_user;
+          END
+
+          -- Create imrandbtnew if not exists
+          IF NOT EXISTS (SELECT * FROM sys.server_principals WHERE name = 'imrandbtnew')
+          BEGIN
+            CREATE LOGIN imrandbtnew WITH PASSWORD = '${{ env.DBT_PASSWORD }}';
+          END
+
+          IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'imrandbtnew')
+          BEGIN
+            CREATE USER imrandbtnew FOR LOGIN imrandbtnew;
+            ALTER ROLE db_owner ADD MEMBER imrandbtnew;
+          END
+
+          -- Create Schemas
+          IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'bronze') EXEC('CREATE SCHEMA bronze');
+          IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'silver') EXEC('CREATE SCHEMA silver');
+          IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'gold') EXEC('CREATE SCHEMA gold');
+        "
 
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -230,19 +254,36 @@ jobs:
         "
 
         echo "👤 Creating DBT user and schemas..."
-        /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -d AdventureWorks2014 -Q "
-          CREATE LOGIN dbt_user WITH PASSWORD = '${{ env.DBT_PASSWORD }}';
-          CREATE USER dbt_user FOR LOGIN dbt_user;
-          ALTER ROLE db_owner ADD MEMBER dbt_user;
+        # Added -b flag to force exit on error
+        /opt/mssql-tools18/bin/sqlcmd -b -S localhost -U sa -P "$SA_PASSWORD" -C -d AdventureWorks2014 -Q "
+          -- Create dbt_user if not exists
+          IF NOT EXISTS (SELECT * FROM sys.server_principals WHERE name = 'dbt_user')
+          BEGIN
+            CREATE LOGIN dbt_user WITH PASSWORD = '${{ env.DBT_PASSWORD }}';
+          END
 
-          CREATE LOGIN imrandbtnew WITH PASSWORD = '${{ env.DBT_PASSWORD }}';
-          CREATE USER imrandbtnew FOR LOGIN imrandbtnew;
-          ALTER ROLE db_owner ADD MEMBER imrandbtnew;
+          IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'dbt_user')
+          BEGIN
+            CREATE USER dbt_user FOR LOGIN dbt_user;
+            ALTER ROLE db_owner ADD MEMBER dbt_user;
+          END
 
-          CREATE SCHEMA bronze;
-          CREATE SCHEMA silver;
-          CREATE SCHEMA gold;
-          CREATE SCHEMA dbo_dev;
+          -- Create imrandbtnew if not exists
+          IF NOT EXISTS (SELECT * FROM sys.server_principals WHERE name = 'imrandbtnew')
+          BEGIN
+            CREATE LOGIN imrandbtnew WITH PASSWORD = '${{ env.DBT_PASSWORD }}';
+          END
+
+          IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'imrandbtnew')
+          BEGIN
+            CREATE USER imrandbtnew FOR LOGIN imrandbtnew;
+            ALTER ROLE db_owner ADD MEMBER imrandbtnew;
+          END
+
+          -- Create Schemas
+          IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'bronze') EXEC('CREATE SCHEMA bronze');
+          IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'silver') EXEC('CREATE SCHEMA silver');
+          IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'gold') EXEC('CREATE SCHEMA gold');
         "
         echo "✅ Database restore complete"
 
