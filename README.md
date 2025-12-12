@@ -4,8 +4,7 @@
 
 [![DBT CI](https://github.com/TranRoger/DATAOPS/workflows/DBT%20CI%20Pipeline/badge.svg)](https://github.com/TranRoger/DATAOPS/actions/workflows/dbt-ci.yml)
 [![Python Quality](https://github.com/TranRoger/DATAOPS/workflows/Python%20Code%20Quality/badge.svg)](https://github.com/TranRoger/DATAOPS/actions/workflows/python-quality.yml)
-[![Deploy Dev](https://github.com/TranRoger/DATAOPS/workflows/Deploy%20to%20Development/badge.svg)](https://github.com/TranRoger/DATAOPS/actions/workflows/deploy-dev.yml)
-[![Deploy Prod](https://github.com/TranRoger/DATAOPS/workflows/Deploy%20to%20Production/badge.svg)](https://github.com/TranRoger/DATAOPS/actions/workflows/deploy-prod.yml)
+[![Deploy DBT Pipeline](https://github.com/TranRoger/DATAOPS/workflows/Deploy%20DBT%20Pipeline/badge.svg)](https://github.com/TranRoger/DATAOPS/actions/workflows/deploy.yml)
 
 ## Project Overview
 This project implements an automated data transformation pipeline using DBT (Data Build Tool) and Apache Airflow. The pipeline extracts data from SQL Server, transforms it using DBT models, and loads it into a target database, following modern data engineering best practices.
