@@ -8,12 +8,13 @@ on:
 
 env:
   DBT_PROFILES_DIR: ./dbt
+  SA_PASSWORD: ${{ secrets.SA_PASSWORD }}
+  DBT_PASSWORD: ${{ secrets.DBT_PASSWORD }}
 
 jobs:
   lint-sql:
     name: Lint SQL Files
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -24,8 +25,7 @@ jobs:
           python-version: '3.9'
 
       - name: Install SQLFluff
-        run: |
-          pip install sqlfluff sqlfluff-templater-dbt
+        run: pip install sqlfluff sqlfluff-templater-dbt
 
       - name: Lint SQL files
         run: |
@@ -36,7 +36,6 @@ jobs:
   lint-python:
     name: Lint Python Files
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -58,24 +57,16 @@ jobs:
     name: Compile DBT Models
     runs-on: ubuntu-latest
     needs: [lint-sql, lint-python]
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Setup DBT Environment
+        uses: ./.github/actions/setup-dbt
         with:
+          dbt-profile-content: ${{ secrets.DBT_PROFILE }}
+          dbt-version: '1.8.5'
           python-version: '3.9'
-
-      - name: Install DBT
-        run: |
-          pip install dbt-sqlserver
-
-      - name: Install DBT dependencies
-        run: |
-          cd dbt
-          dbt deps
 
       - name: Compile DBT models
         run: |
@@ -94,29 +85,48 @@ jobs:
     name: Generate DBT Documentation
     runs-on: ubuntu-latest
     needs: dbt-compile
-    # if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2019-latest
+        env:
+          ACCEPT_EULA: Y
+          SA_PASSWORD: ${{ secrets.SA_PASSWORD }}
+          MSSQL_PID: Developer
+        ports:
+        - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P $SA_PASSWORD -C -Q 'SELECT 1' || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P $SA_PASSWORD -Q 'SELECT 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Setup SQL Server
+        uses: ./.github/actions/setup-sqlserver
         with:
+          sa-password: ${{ secrets.SA_PASSWORD }}
+
+      - name: Restore AdventureWorks Database
+        uses: ./.github/actions/restore-adventureworks
+        with:
+          sa-password: ${{ secrets.SA_PASSWORD }}
+          dbt-password: ${{ secrets.DBT_PASSWORD }}
+
+      - name: Setup DBT Environment
+        uses: ./.github/actions/setup-dbt
+        with:
+          dbt-profile-content: ${{ secrets.DBT_PROFILE }}
+          dbt-version: '1.8.5'
           python-version: '3.9'
-
-      - name: Install DBT
-        run: pip install dbt-sqlserver
-
-      - name: Install dependencies
-        run: |
-          cd dbt
-          dbt deps
 
       - name: Generate documentation
         run: |
           cd dbt
-          dbt docs generate --profiles-dir . || true
+          dbt docs generate --profiles-dir . --target dev || true
         continue-on-error: true
 
       - name: Upload documentation
