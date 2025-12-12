@@ -1,118 +1,118 @@
 version: 2
 
 models:
-  - name: brnz_customers
-    description: "Bronze layer customer data from AdventureWorks"
-    columns:
-      - name: CustomerID
-        description: "Primary key for customer"
-        tests:
-          - unique
-          - not_null
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: int
+- name: brnz_customers
+  description: "Bronze layer customer data from AdventureWorks"
+  columns:
+  - name: CustomerID
+    description: "Primary key for customer"
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_values_to_be_of_type:
+        column_type: int
 
-      - name: FirstName
-        description: "Customer first name (NULL for store customers)"
+  - name: FirstName
+    description: "Customer first name (NULL for store customers)"
 
-      - name: LastName
-        description: "Customer last name (NULL for store customers)"
+  - name: LastName
+    description: "Customer last name (NULL for store customers)"
 
-      - name: EmailPromotion
-        description: "Email promotion preference"
-        tests:
-          - accepted_values:
-              values: [0, 1, 2]
+  - name: EmailPromotion
+    description: "Email promotion preference"
+    tests:
+    - accepted_values:
+        values: [ 0, 1, 2 ]
 
-      - name: StoreID
-        description: "Store identifier"
+  - name: StoreID
+    description: "Store identifier"
 
-      - name: TerritoryID
-        description: "Sales territory"
+  - name: TerritoryID
+    description: "Sales territory"
 
-      - name: last_modified_date
-        description: "Last modified timestamp"
-        tests:
-          - not_null
+  - name: last_modified_date
+    description: "Last modified timestamp"
+    tests:
+    - not_null
 
-  - name: brnz_sales_orders
-    description: "Bronze layer sales order data"
-    columns:
-      - name: sales_order_id
-        description: "Primary key"
-        tests:
-          - not_null
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: int
+- name: brnz_sales_orders
+  description: "Bronze layer sales order data"
+  columns:
+  - name: sales_order_id
+    description: "Primary key"
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_values_to_be_of_type:
+        column_type: int
 
-      - name: order_date
-        description: "Order date"
-        tests:
-          - not_null
-          - no_future_dates
+  - name: order_date
+    description: "Order date"
+    tests:
+    - not_null
+    - no_future_dates
 
-      - name: due_date
-        description: "Due date"
+  - name: due_date
+    description: "Due date"
 
-      - name: ship_date
-        description: "Ship date"
+  - name: ship_date
+    description: "Ship date"
 
-      - name: status
-        description: "Order status"
-        tests:
-          - accepted_values:
-              values: [1, 2, 3, 4, 5, 6]
+  - name: order_status
+    description: "Order status"
+    tests:
+    - accepted_values:
+        values: [ 1, 2, 3, 4, 5, 6 ]
 
-      - name: online_order_flag
-        description: "Online order flag"
-        tests:
-          - dbt_expectations.expect_column_values_to_be_in_set:
-              value_set: [0, 1]
+  - name: online_order_flag
+    description: "Online order flag"
+    tests:
+    - dbt_expectations.expect_column_values_to_be_in_set:
+        value_set: [ 0, 1 ]
 
-      - name: sales_order_number
-        description: "Sales order number"
-        tests:
-          - not_null
+  - name: sales_order_number
+    description: "Sales order number"
+    tests:
+    - not_null
 
-      - name: purchase_order_number
-        description: "Purchase order number"
+  - name: purchase_order_number
+    description: "Purchase order number"
 
-      - name: customer_id
-        description: "Foreign key to customer"
-        tests:
-          - not_null
-          - relationships:
-              to: ref('brnz_customers')
-              field: CustomerID
+  - name: customer_id
+    description: "Foreign key to customer"
+    tests:
+    - not_null
+    - relationships:
+        to: ref('brnz_customers')
+        field: CustomerID
 
-      - name: sales_person_id
-        description: "Sales person ID"
+  - name: sales_person_id
+    description: "Sales person ID"
 
-      - name: territory_id
-        description: "Territory ID"
+  - name: territory_id
+    description: "Territory ID"
 
-      - name: order_detail_id
-        description: "Order detail ID"
+  - name: order_detail_id
+    description: "Order detail ID"
 
-      - name: product_id
-        description: "Product ID"
-        tests:
-          - not_null
+  - name: product_id
+    description: "Product ID"
+    tests:
+    - not_null
 
-      - name: order_qty
-        description: "Order quantity"
-        tests:
-          - positive_values
+  - name: order_qty
+    description: "Order quantity"
+    tests:
+    - positive_values
 
-      - name: unit_price
-        description: "Unit price"
-        tests:
-          - positive_values
+  - name: unit_price
+    description: "Unit price"
+    tests:
+    - positive_values
 
-      - name: unit_price_discount
-        description: "Unit price discount"
+  - name: unit_price_discount
+    description: "Unit price discount"
 
-      - name: line_total
-        description: "Line total"
-        tests:
-          - positive_values
+  - name: line_total
+    description: "Line total"
+    tests:
+    - positive_values

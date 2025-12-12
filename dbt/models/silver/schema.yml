@@ -1,243 +1,243 @@
 version: 2
 
 models:
-  - name: slvr_customers
-    description: "Silver layer: Cleaned and standardized customer data with NULL handling and derived fields for analytics"
-    columns:
-      - name: customer_id
-        description: "Unique customer identifier (Primary Key)"
-        tests:
-          - unique
-          - not_null
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: int
-
-      - name: first_name
-        description: "Customer first name - defaults to 'Unknown' for store/business customers without person records"
-        tests:
-          - not_null
-
-      - name: last_name
-        description: "Customer last name - defaults to 'Unknown' for store/business customers without person records"
-        tests:
-          - not_null
-
-      - name: full_name
-        description: "Calculated: Concatenated full name (first_name + last_name) for reporting and display purposes"
-        tests:
-          - not_null
-
-      - name: email_promotion
-        description: "Email promotion preference - 0: No promotions, 1: From AdventureWorks only, 2: From AdventureWorks and partners"
-        tests:
-          - accepted_values:
-              values: [0, 1, 2]
-
-      - name: store_id
-        description: "Foreign key to Store table - NULL for individual customers, populated for business accounts"
-
-      - name: territory_id
-        description: "Sales territory assignment for geographic segmentation and sales routing"
-
-      - name: last_modified_date
-        description: "Timestamp of last modification in source system for change tracking"
-        tests:
-          - not_null
-
-  - name: slvr_products
-    description: "Silver layer: Cleaned product catalog with standardized attributes and business flags"
-    columns:
-      - name: product_id
-        description: "Unique product identifier (Primary Key)"
-        tests:
-          - unique
-          - not_null
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: int
-
-      - name: product_name
-        description: "Official product name for display and search"
-        tests:
-          - not_null
-
-      - name: product_number
-        description: "Internal product SKU/code for inventory and order management"
-        tests:
-          - not_null
-
-      - name: color
-        description: "Product color - standardized to 'N/A' when not applicable"
-        tests:
-          - not_null
-
-      - name: standard_cost
-        description: "Manufacturing or acquisition cost - basis for profitability calculations"
-        tests:
-          - not_null
-          - positive_values
-
-      - name: list_price
-        description: "Selling price before discounts - used for revenue projections"
-        tests:
-          - not_null
-          - positive_values
-
-      - name: size
-        description: "Product size specification - standardized to 'N/A' when not applicable"
-
-      - name: weight
-        description: "Product weight - defaults to 0 for items without weight measurement"
-
-      - name: product_line
-        description: "Product line classification (R=Road, M=Mountain, T=Touring, S=Standard)"
-
-      - name: class
-        description: "Product class (H=High, M=Medium, L=Low) for quality segmentation"
-
-      - name: style
-        description: "Product style (W=Women, M=Men, U=Unisex) for merchandising"
-
-      - name: subcategory_id
-        description: "Foreign key to ProductSubcategory for hierarchical categorization"
-
-      - name: subcategory_name
-        description: "Product subcategory name - defaults to 'Uncategorized' for products without subcategory"
-        tests:
-          - not_null
-
-      - name: category_id
-        description: "Foreign key to ProductCategory for top-level categorization"
-
-      - name: sell_start_date
-        description: "Date product became available for sale"
-        tests:
-          - not_null
-
-      - name: sell_end_date
-        description: "Date product was removed from active catalog - NULL for currently selling products"
-
-      - name: is_discontinued
-        description: "Calculated: Binary flag (1=Discontinued, 0=Active) derived from DiscontinuedDate for easy filtering"
-        tests:
-          - accepted_values:
-              values: [0, 1]
-
-      - name: last_modified_date
-        description: "Timestamp of last modification for change tracking"
-        tests:
-          - not_null
-
-  - name: slvr_sales_orders
-    description: "Silver layer: Cleaned sales orders with business logic, calculated metrics, and data quality filters"
-    columns:
-      - name: sales_order_id
-        description: "Sales order identifier - groups multiple line items into single customer order"
-        tests:
-          - not_null
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: int
-
-      - name: order_detail_id
-        description: "Unique order line item identifier (Primary Key with sales_order_id)"
-        tests:
-          - not_null
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: int
-
-      - name: order_date
-        description: "Date customer placed the order"
-        tests:
-          - not_null
-          - no_future_dates
-
-      - name: due_date
-        description: "Expected delivery date promised to customer"
-
-      - name: ship_date
-        description: "Actual shipment date - NULL for unshipped orders"
-
-      - name: status
-        description: "Order status code (1=In Process, 2=Approved, 3=Backordered, 4=Rejected, 5=Shipped, 6=Cancelled)"
-        tests:
-          - accepted_values:
-              values: [1, 2, 3, 4, 5, 6]
-
-      - name: order_channel
-        description: "Calculated: Sales channel derived from online_order_flag ('Online' or 'Offline') for channel analysis"
-        tests:
-          - not_null
-          - accepted_values:
-              values: ['Online', 'Offline']
-
-      - name: sales_order_number
-        description: "Human-readable order number for customer reference"
-        tests:
-          - not_null
-
-      - name: purchase_order_number
-        description: "Customer's purchase order reference - may be NULL for consumer orders"
-
-      - name: customer_id
-        description: "Foreign key to Customer - identifies who placed the order"
-        tests:
-          - not_null
-          - relationships:
-              to: ref('slvr_customers')
-              field: customer_id
-
-      - name: sales_person_id
-        description: "Foreign key to SalesPerson - NULL for online orders without sales rep"
-
-      - name: territory_id
-        description: "Sales territory for commission and reporting purposes"
-
-      - name: product_id
-        description: "Foreign key to Product - identifies item being purchased"
-        tests:
-          - not_null
-          - relationships:
-              to: ref('slvr_products')
-              field: product_id
-
-      - name: order_qty
-        description: "Quantity ordered - filtered to exclude zero/negative quantities in transformation"
-        tests:
-          - not_null
-          - positive_values
-
-      - name: unit_price
-        description: "Price per unit at time of order (may differ from current list price)"
-        tests:
-          - not_null
-
-      - name: unit_price_discount
-        description: "Discount amount applied per unit (0 means no discount)"
-
-      - name: line_total
-        description: "Total revenue for this line item after discounts: (unit_price - discount) * quantity"
-        tests:
-          - not_null
-          - positive_values
-
-      - name: gross_amount
-        description: "Calculated: Revenue before discounts (unit_price * order_qty) for discount analysis"
-        tests:
-          - not_null
-          - positive_values
-
-      - name: effective_unit_price
-        description: "Calculated: Actual price paid per unit (line_total / order_qty) accounting for all discounts"
-        tests:
-          - not_null
-
-      - name: has_discount
-        description: "Calculated: Binary flag (1=Discounted, 0=Full Price) for promotional analysis"
-        tests:
-          - accepted_values:
-              values: [0, 1]
-
+- name: slvr_customers
+  description: "Silver layer: Cleaned and standardized customer data with NULL handling and derived fields for analytics"
+  columns:
+  - name: customer_id
+    description: "Unique customer identifier (Primary Key)"
     tests:
-      - dbt_utils.unique_combination_of_columns:
-          combination_of_columns:
-            - sales_order_id
-            - order_detail_id
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_values_to_be_of_type:
+        column_type: int
+
+  - name: first_name
+    description: "Customer first name - defaults to 'Unknown' for store/business customers without person records"
+    tests:
+    - not_null
+
+  - name: last_name
+    description: "Customer last name - defaults to 'Unknown' for store/business customers without person records"
+    tests:
+    - not_null
+
+  - name: full_name
+    description: "Calculated: Concatenated full name (first_name + last_name) for reporting and display purposes"
+    tests:
+    - not_null
+
+  - name: email_promotion
+    description: "Email promotion preference - 0: No promotions, 1: From AdventureWorks only, 2: From AdventureWorks and partners"
+    tests:
+    - accepted_values:
+        values: [ 0, 1, 2 ]
+
+  - name: store_id
+    description: "Foreign key to Store table - NULL for individual customers, populated for business accounts"
+
+  - name: territory_id
+    description: "Sales territory assignment for geographic segmentation and sales routing"
+
+  - name: last_modified_date
+    description: "Timestamp of last modification in source system for change tracking"
+    tests:
+    - not_null
+
+- name: slvr_products
+  description: "Silver layer: Cleaned product catalog with standardized attributes and business flags"
+  columns:
+  - name: product_id
+    description: "Unique product identifier (Primary Key)"
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_values_to_be_of_type:
+        column_type: int
+
+  - name: product_name
+    description: "Official product name for display and search"
+    tests:
+    - not_null
+
+  - name: product_number
+    description: "Internal product SKU/code for inventory and order management"
+    tests:
+    - not_null
+
+  - name: color
+    description: "Product color - standardized to 'N/A' when not applicable"
+    tests:
+    - not_null
+
+  - name: standard_cost
+    description: "Manufacturing or acquisition cost - basis for profitability calculations"
+    tests:
+    - not_null
+    - positive_values
+
+  - name: list_price
+    description: "Selling price before discounts - used for revenue projections"
+    tests:
+    - not_null
+    - positive_values
+
+  - name: size
+    description: "Product size specification - standardized to 'N/A' when not applicable"
+
+  - name: weight
+    description: "Product weight - defaults to 0 for items without weight measurement"
+
+  - name: product_line
+    description: "Product line classification (R=Road, M=Mountain, T=Touring, S=Standard)"
+
+  - name: class
+    description: "Product class (H=High, M=Medium, L=Low) for quality segmentation"
+
+  - name: style
+    description: "Product style (W=Women, M=Men, U=Unisex) for merchandising"
+
+  - name: subcategory_id
+    description: "Foreign key to ProductSubcategory for hierarchical categorization"
+
+  - name: subcategory_name
+    description: "Product subcategory name - defaults to 'Uncategorized' for products without subcategory"
+    tests:
+    - not_null
+
+  - name: category_id
+    description: "Foreign key to ProductCategory for top-level categorization"
+
+  - name: sell_start_date
+    description: "Date product became available for sale"
+    tests:
+    - not_null
+
+  - name: sell_end_date
+    description: "Date product was removed from active catalog - NULL for currently selling products"
+
+  - name: is_discontinued
+    description: "Calculated: Binary flag (1=Discontinued, 0=Active) derived from DiscontinuedDate for easy filtering"
+    tests:
+    - accepted_values:
+        values: [ 0, 1 ]
+
+  - name: last_modified_date
+    description: "Timestamp of last modification for change tracking"
+    tests:
+    - not_null
+
+- name: slvr_sales_orders
+  description: "Silver layer: Cleaned sales orders with business logic, calculated metrics, and data quality filters"
+  columns:
+  - name: sales_order_id
+    description: "Sales order identifier - groups multiple line items into single customer order"
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_values_to_be_of_type:
+        column_type: int
+
+  - name: order_detail_id
+    description: "Unique order line item identifier (Primary Key with sales_order_id)"
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_values_to_be_of_type:
+        column_type: int
+
+  - name: order_date
+    description: "Date customer placed the order"
+    tests:
+    - not_null
+    - no_future_dates
+
+  - name: due_date
+    description: "Expected delivery date promised to customer"
+
+  - name: ship_date
+    description: "Actual shipment date - NULL for unshipped orders"
+
+  - name: order_status
+    description: "Order status code (1=In Process, 2=Approved, 3=Backordered, 4=Rejected, 5=Shipped, 6=Cancelled)"
+    tests:
+    - accepted_values:
+        values: [ 1, 2, 3, 4, 5, 6 ]
+
+  - name: order_channel
+    description: "Calculated: Sales channel derived from online_order_flag ('Online' or 'Offline') for channel analysis"
+    tests:
+    - not_null
+    - accepted_values:
+        values: [ 'Online', 'Offline' ]
+
+  - name: sales_order_number
+    description: "Human-readable order number for customer reference"
+    tests:
+    - not_null
+
+  - name: purchase_order_number
+    description: "Customer's purchase order reference - may be NULL for consumer orders"
+
+  - name: customer_id
+    description: "Foreign key to Customer - identifies who placed the order"
+    tests:
+    - not_null
+    - relationships:
+        to: ref('slvr_customers')
+        field: customer_id
+
+  - name: sales_person_id
+    description: "Foreign key to SalesPerson - NULL for online orders without sales rep"
+
+  - name: territory_id
+    description: "Sales territory for commission and reporting purposes"
+
+  - name: product_id
+    description: "Foreign key to Product - identifies item being purchased"
+    tests:
+    - not_null
+    - relationships:
+        to: ref('slvr_products')
+        field: product_id
+
+  - name: order_qty
+    description: "Quantity ordered - filtered to exclude zero/negative quantities in transformation"
+    tests:
+    - not_null
+    - positive_values
+
+  - name: unit_price
+    description: "Price per unit at time of order (may differ from current list price)"
+    tests:
+    - not_null
+
+  - name: unit_price_discount
+    description: "Discount amount applied per unit (0 means no discount)"
+
+  - name: line_total
+    description: "Total revenue for this line item after discounts: (unit_price - discount) * quantity"
+    tests:
+    - not_null
+    - positive_values
+
+  - name: gross_amount
+    description: "Calculated: Revenue before discounts (unit_price * order_qty) for discount analysis"
+    tests:
+    - not_null
+    - positive_values
+
+  - name: effective_unit_price
+    description: "Calculated: Actual price paid per unit (line_total / order_qty) accounting for all discounts"
+    tests:
+    - not_null
+
+  - name: has_discount
+    description: "Calculated: Binary flag (1=Discounted, 0=Full Price) for promotional analysis"
+    tests:
+    - accepted_values:
+        values: [ 0, 1 ]
+
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - sales_order_id
+      - order_detail_id
