@@ -114,7 +114,7 @@ jobs:
         echo "${{ secrets.DBT_PROFILE }}" > dbt/profiles.yml
 
     - name: Install DBT
-      run: pip install -r dbt/requirements.txt
+      run: pip install dbt-sqlserver
 
     - name: Install dependencies
       run: |
