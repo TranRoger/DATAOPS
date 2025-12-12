@@ -175,36 +175,8 @@ jobs:
 
     - name: Create CI profiles.yml
       run: |
-        cat > dbt/profiles.yml << 'EOF'
-        dbt_airflow_project:
-          target: dev
-          outputs:
-            dev:
-              type: sqlserver
-              driver: 'ODBC Driver 18 for SQL Server'
-              server: localhost
-              port: 1433
-              database: AdventureWorks2014
-              schema: dbo_dev
-              user: dbt_user
-              password: 'DbtUser@12345'
-              encrypt: true
-              trust_cert: true
-              threads: 4
-            prod:
-              type: sqlserver
-              driver: 'ODBC Driver 18 for SQL Server'
-              server: localhost
-              port: 1433
-              database: AdventureWorks2014
-              schema: dbo
-              user: dbt_user
-              password: 'DbtUser@12345'
-              encrypt: true
-              trust_cert: true
-              threads: 2
-        EOF
-        echo "✅ CI profiles.yml created"
+        echo "📄 Creating DBT profiles.yml for CI..."
+        echo "${{ secrets.DBT_PROFILE }}" > dbt/profiles.yml
 
     - name: Install DBT dependencies
       run: |
