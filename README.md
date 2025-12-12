@@ -10,7 +10,7 @@
 
 Automated data transformation pipeline implementing **Medallion Architecture** (Bronze → Silver → Gold) using **DBT** and **Apache Airflow**, orchestrated through **Docker Compose** locally and **GitHub Actions** for CI/CD.
 
-![Overall Architecture](docs/overall-architecture.svg)
+![Overall Architecture](docs/overall-architecture.png)
 
 ### Key Features
 - ✅ **Medallion Architecture**: Bronze/Silver/Gold data layers
@@ -29,9 +29,9 @@ Automated data transformation pipeline implementing **Medallion Architecture** (
 
 | Component | Environment | Purpose |
 |-----------|-------------|---------|
-| ![Airflow](docs/airflow.svg) **Airflow** | Local | Orchestrates DBT transformations (hourly schedule) |
-| ![DBT](docs/dbt.svg) **DBT** | Local + CI/CD | Data transformations (Bronze → Silver → Gold) |
-| ![GitHub Actions](docs/github-action.svg) **GitHub Actions** | CI/CD | Automated testing & deployment |
+| ![Airflow](docs/airflow.png) **Airflow** | Local | Orchestrates DBT transformations (hourly schedule) |
+| ![DBT](docs/dbt.png) **DBT** | Local + CI/CD | Data transformations (Bronze → Silver → Gold) |
+| ![GitHub Actions](docs/github-action.png) **GitHub Actions** | CI/CD | Automated testing & deployment |
 | **SQL Server** | Local + CI/CD | AdventureWorks 2014 source database |
 
 ---
