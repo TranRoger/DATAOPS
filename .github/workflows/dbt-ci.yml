@@ -100,10 +100,101 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Install SQL Server tools
+        run: |
+          curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
+          curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y mssql-tools18 unixodbc-dev
+          echo 'export PATH="$PATH:/opt/mssql-tools18/bin"' >> ~/.bashrc
+
+      - name: Wait for SQL Server to be ready
+        run: |
+          echo "⏳ Waiting for SQL Server to be ready..."
+          for i in {1..30}; do
+            if /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -Q "SELECT 1" &>/dev/null; then
+              echo "✅ SQL Server is ready!"
+              break
+            fi
+            echo "Waiting... attempt $i/30"
+            sleep 5
+          done
+
+      - name: Download and restore AdventureWorks database
+        run: |
+          echo "📥 Downloading AdventureWorks2014 backup..."
+          # Download the backup file
+          curl -L -o /tmp/AdventureWorks2014.bak "https://github.com/Microsoft/sql-server-samples/releases/download/adventureworks/AdventureWorks2014.bak"
+
+          echo "🔄 Copying backup file into SQL Server container..."
+          # Dynamically find the running SQL Server container ID
+          CONTAINER_ID=$(docker ps --filter "ancestor=mcr.microsoft.com/mssql/server:2019-latest" --format "{{.ID}}")
+
+          # Verify container was found before proceeding
+          if [ -z "$CONTAINER_ID" ]; then
+            echo "❌ Error: SQL Server container not found!"
+            exit 1
+          fi
+
+          # Copy file into the container
+          docker cp /tmp/AdventureWorks2014.bak $CONTAINER_ID:/tmp/AdventureWorks2014.bak
+
+          echo "📦 Restoring AdventureWorks2014 database..."
+          # Run the restore command using sqlcmd inside the runner (connecting to localhost)
+          # Note: Added NO_WAIT and STATS for better logging
+          /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -Q "
+            RESTORE DATABASE AdventureWorks2014
+            FROM DISK = '/tmp/AdventureWorks2014.bak'
+            WITH
+              MOVE 'AdventureWorks2014_Data' TO '/var/opt/mssql/data/AdventureWorks2014.mdf',
+              MOVE 'AdventureWorks2014_Log' TO '/var/opt/mssql/data/AdventureWorks2014_log.ldf',
+              REPLACE,
+              STATS = 10;
+          "
+
+          echo "👤 Creating DBT user and schemas..."
+          # Added -b flag to force exit on error
+          /opt/mssql-tools18/bin/sqlcmd -b -S localhost -U sa -P "$SA_PASSWORD" -C -d AdventureWorks2014 -Q "
+            -- Create dbt_user if not exists
+            IF NOT EXISTS (SELECT * FROM sys.server_principals WHERE name = 'dbt_user')
+            BEGIN
+              CREATE LOGIN dbt_user WITH PASSWORD = '${{ env.DBT_PASSWORD }}';
+            END
+
+            IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'dbt_user')
+            BEGIN
+              CREATE USER dbt_user FOR LOGIN dbt_user;
+              ALTER ROLE db_owner ADD MEMBER dbt_user;
+            END
+
+            -- Create imrandbtnew if not exists
+            IF NOT EXISTS (SELECT * FROM sys.server_principals WHERE name = 'imrandbtnew')
+            BEGIN
+              CREATE LOGIN imrandbtnew WITH PASSWORD = '${{ env.DBT_PASSWORD }}';
+            END
+
+            IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'imrandbtnew')
+            BEGIN
+              CREATE USER imrandbtnew FOR LOGIN imrandbtnew;
+              ALTER ROLE db_owner ADD MEMBER imrandbtnew;
+            END
+
+            -- Create Schemas
+            IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'bronze') EXEC('CREATE SCHEMA bronze');
+            IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'silver') EXEC('CREATE SCHEMA silver');
+            IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'gold') EXEC('CREATE SCHEMA gold');
+          "
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
+
+      - name: Create profiles.yml from secret
+        run: |
+          cat <<EOF > dbt/profiles.yml
+          ${{ secrets.DBT_PROFILE }}
+          EOF
 
       - name: Install DBT
         run: pip install dbt-sqlserver

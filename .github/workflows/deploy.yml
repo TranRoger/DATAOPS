@@ -331,13 +331,6 @@ jobs:
         dbt test --profiles-dir . --target ${{ needs.pre-deploy-validation.outputs.target }} 2>&1 | tee dbt_test.log
         echo "✅ Data quality tests passed"
 
-    - name: Generate DBT documentation
-      run: |
-        cd dbt
-        echo "📚 Generating DBT documentation..."
-        dbt docs generate --profiles-dir . --target ${{ needs.pre-deploy-validation.outputs.target }}
-        echo "✅ Documentation generated"
-
     - name: Upload deployment logs
       uses: actions/upload-artifact@v4
       if: always()
