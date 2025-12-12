@@ -6,9 +6,6 @@ on:
     - develop # Auto-deploy to development
     - main # Auto-deploy to production
 
-  pull_request:
-    branches: [ main, develop ]
-
 env:
   DBT_PROFILES_DIR: ./dbt
   SA_PASSWORD: ${{ secrets.SA_PASSWORD }}
