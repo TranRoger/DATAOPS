@@ -15,7 +15,7 @@ env:
   DBT_PASSWORD: ${{ secrets.DBT_PASSWORD }}
 
 permissions:
-  contents: read
+  contents: write
   actions: write
 
   pull-requests: write
