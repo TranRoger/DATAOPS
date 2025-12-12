@@ -35,19 +35,14 @@ Feature Branch → develop → main
 
 ## Deployment Workflows
 
-### 1. Development Deployment
-- **Trigger**: Push to `develop` branch
-- **Workflow**: `.github/workflows/deploy-dev.yml`
-- **Duration**: ~5-10 minutes
+### 1. Unified Deployment Pipeline
+- **Trigger**: Push to `develop` or `main` branch
+- **Workflow**: `.github/workflows/deploy.yml`
+- **Duration**: ~5-15 minutes
 - **Automatic**: Yes
+- **Environment Detection**: Automatic (dev for `develop`, prod for `main`)
 
-### 2. Production Deployment
-- **Trigger**: Push to `main` branch
-- **Workflow**: `.github/workflows/deploy-prod.yml`
-- **Duration**: ~10-15 minutes
-- **Automatic**: Yes (with optional manual trigger)
-
-### 3. Manual Rollback
+### 2. Manual Rollback
 - **Trigger**: Manual via GitHub Actions UI
 - **Workflow**: `.github/workflows/rollback.yml`
 - **Duration**: ~5-10 minutes
@@ -90,7 +85,7 @@ Feature Branch → develop → main
    ```
 
 2. **Monitor deployment**
-   - Navigate to: GitHub → Actions → "Deploy to Development"
+   - Navigate to: GitHub → Actions → "Deploy DBT Pipeline"
    - Watch workflow progress in real-time
    - Check for any errors or warnings
 
@@ -102,7 +97,7 @@ Feature Branch → develop → main
 
 #### Manual Deployment
 1. **Trigger from GitHub Actions**
-   - Go to: Actions → "Deploy to Development" → "Run workflow"
+   - Go to: Actions → "Deploy DBT Pipeline" → "Run workflow"
    - Select `develop` branch
    - Click "Run workflow"
 
@@ -118,7 +113,7 @@ Feature Branch → develop → main
    ```
 
 2. **Monitor production deployment**
-   - Navigate to: GitHub → Actions → "Deploy to Production"
+   - Navigate to: GitHub → Actions → "Deploy DBT Pipeline"
    - Workflow includes environment protection (if configured)
    - Review deployment summary
 
@@ -128,7 +123,7 @@ Feature Branch → develop → main
    - Review deployment logs
 
 #### Emergency Deployment (Manual Trigger)
-1. **Navigate to Actions → "Deploy to Production"**
+1. **Navigate to Actions → "Deploy DBT Pipeline"**
 2. **Click "Run workflow"**
 3. **Configure options**:
    - Branch: `main`
@@ -151,7 +146,7 @@ Feature Branch → develop → main
 #### 1. Check Workflow Status
 ```bash
 # Via GitHub CLI
-gh run list --workflow=deploy-dev.yml --limit 5
+gh run list --workflow=deploy.yml --limit 5
 gh run view <run-id> --log
 ```
 
