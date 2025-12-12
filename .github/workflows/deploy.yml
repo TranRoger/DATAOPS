@@ -82,7 +82,11 @@ jobs:
         echo "📥 Downloading AdventureWorks2014 backup..."
         curl -L -o /tmp/AdventureWorks2014.bak "https://github.com/Microsoft/sql-server-samples/releases/download/adventureworks/AdventureWorks2014.bak"
 
-        echo "🔄 Restoring AdventureWorks2014 database..."
+        echo "� Copying backup file into SQL Server container..."
+        CONTAINER_ID=$(docker ps --filter "ancestor=mcr.microsoft.com/mssql/server:2019-latest" --format "{{.ID}}")
+        docker cp /tmp/AdventureWorks2014.bak $CONTAINER_ID:/tmp/AdventureWorks2014.bak
+
+        echo "�🔄 Restoring AdventureWorks2014 database..."
         /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -Q "
           RESTORE DATABASE AdventureWorks2014
           FROM DISK = '/tmp/AdventureWorks2014.bak'
@@ -92,25 +96,6 @@ jobs:
         "
         echo "✅ AdventureWorks2014 database restored successfully"
 
-    - name: Setup DBT user and schemas
-      run: |
-        echo "🔧 Creating DBT user and schemas..."
-        /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -d AdventureWorks2014 -Q "
-          CREATE LOGIN dbt_user WITH PASSWORD = '${{ env.DBT_PASSWORD }}';
-          CREATE USER dbt_user FOR LOGIN dbt_user;
-          ALTER ROLE db_owner ADD MEMBER dbt_user;
-
-          -- Create schemas for medallion architecture
-          IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'bronze')
-            EXEC('CREATE SCHEMA bronze');
-          IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'silver')
-            EXEC('CREATE SCHEMA silver');
-          IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'gold')
-            EXEC('CREATE SCHEMA gold');
-          IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'dbo_dev')
-            EXEC('CREATE SCHEMA dbo_dev');
-        "
-        echo "✅ DBT user and schemas created successfully"
 
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -205,14 +190,17 @@ jobs:
         done
 
         echo "📥 Downloading AdventureWorks2014 backup..."
-        mkdir -p /tmp/backup
-        curl -L -o /tmp/backup/AdventureWorks2014.bak \
+        curl -L -o /tmp/AdventureWorks2014.bak \
           "https://github.com/Microsoft/sql-server-samples/releases/download/adventureworks/AdventureWorks2014.bak"
+
+        echo "📦 Copying backup file into SQL Server container..."
+        CONTAINER_ID=$(docker ps --filter "ancestor=mcr.microsoft.com/mssql/server:2019-latest" --format "{{.ID}}")
+        docker cp /tmp/AdventureWorks2014.bak $CONTAINER_ID:/tmp/AdventureWorks2014.bak
 
         echo "🔧 Restoring AdventureWorks2014 database..."
         /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -Q "
           RESTORE DATABASE AdventureWorks2014
-          FROM DISK = '/tmp/backup/AdventureWorks2014.bak'
+          FROM DISK = '/tmp/AdventureWorks2014.bak'
           WITH MOVE 'AdventureWorks2014_Data' TO '/var/opt/mssql/data/AdventureWorks2014.mdf',
                MOVE 'AdventureWorks2014_Log' TO '/var/opt/mssql/data/AdventureWorks2014_log.ldf',
                REPLACE;
