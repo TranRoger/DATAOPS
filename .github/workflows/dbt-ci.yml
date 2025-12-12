@@ -153,8 +153,21 @@ jobs:
           "
 
           echo "👤 Creating DBT user and schemas..."
-          # FIX: Added -b to fail on error and robust user creation logic
+          # Added -b flag to force exit on error
           /opt/mssql-tools18/bin/sqlcmd -b -S localhost -U sa -P "$SA_PASSWORD" -C -d AdventureWorks2014 -Q "
+            -- Create dbt_user if not exists
+            IF NOT EXISTS (SELECT * FROM sys.server_principals WHERE name = 'dbt_user')
+            BEGIN
+              CREATE LOGIN dbt_user WITH PASSWORD = '${{ env.DBT_PASSWORD }}';
+            END
+
+            IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'dbt_user')
+            BEGIN
+              CREATE USER dbt_user FOR LOGIN dbt_user;
+              ALTER ROLE db_owner ADD MEMBER dbt_user;
+            END
+
+            -- Create imrandbtnew if not exists
             IF NOT EXISTS (SELECT * FROM sys.server_principals WHERE name = 'imrandbtnew')
             BEGIN
               CREATE LOGIN imrandbtnew WITH PASSWORD = '${{ env.DBT_PASSWORD }}';
@@ -166,6 +179,7 @@ jobs:
               ALTER ROLE db_owner ADD MEMBER imrandbtnew;
             END
 
+            -- Create Schemas
             IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'bronze') EXEC('CREATE SCHEMA bronze');
             IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'silver') EXEC('CREATE SCHEMA silver');
             IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'gold') EXEC('CREATE SCHEMA gold');
