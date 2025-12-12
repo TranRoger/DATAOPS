@@ -76,8 +76,8 @@ jobs:
 
     - name: Install DBT
       run: |
-        echo "📦 Installing DBT..."
-        pip install dbt-sqlserver==1.8.2
+        echo "📦 Installing DBT from requirements.txt..."
+        pip install -r dbt/requirements.txt
 
     - name: Install DBT packages
       run: |
