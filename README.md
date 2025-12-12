@@ -1,103 +1,52 @@
 # DBT + Airflow + SQL Server DataOps Project
 
-## CI/CD Status
-
 [![DBT CI](https://github.com/TranRoger/DATAOPS/workflows/DBT%20CI%20Pipeline/badge.svg)](https://github.com/TranRoger/DATAOPS/actions/workflows/dbt-ci.yml)
 [![Python Quality](https://github.com/TranRoger/DATAOPS/workflows/Python%20Code%20Quality/badge.svg)](https://github.com/TranRoger/DATAOPS/actions/workflows/python-quality.yml)
 [![Deploy DBT Pipeline](https://github.com/TranRoger/DATAOPS/workflows/Deploy%20DBT%20Pipeline/badge.svg)](https://github.com/TranRoger/DATAOPS/actions/workflows/deploy.yml)
 
-## Project Overview
-This project implements an automated data transformation pipeline using DBT (Data Build Tool) and Apache Airflow. The pipeline extracts data from SQL Server, transforms it using DBT models, and loads it into a target database, following modern data engineering best practices.
+---
 
-### Architecture Overview
-```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│  SQL Server │ ──► │    DBT      │ ──► │  Target DB  │
-└─────────────┘     └─────────────┘     └─────────────┘
-        ▲                  ▲                   ▲
-        └──────────┬──────┴───────────┬───────┘
-                   │                   │
-            ┌──────┴───────┐    ┌─────┴──────┐
-            │   Airflow    │    │  Docker    │
-            └──────────────┘    └────────────┘
-```
+## 📚 Project Overview
 
-## Prerequisites
-- Docker and Docker Compose
+Automated data transformation pipeline implementing **Medallion Architecture** (Bronze → Silver → Gold) using **DBT** and **Apache Airflow**, orchestrated through **Docker Compose** locally and **GitHub Actions** for CI/CD.
+
+![Overall Architecture](docs/overall-architecture.svg)
+
+### Key Features
+- ✅ **Medallion Architecture**: Bronze/Silver/Gold data layers
+- ✅ **Airflow Orchestration**: Scheduled DBT transformations (local)
+- ✅ **Automated Testing**: Schema tests, custom data quality checks
+- ✅ **CI/CD Pipeline**: GitHub Actions for deployment automation
+- ✅ **Data Lineage**: Auto-generated DBT documentation
+
+**📖 For detailed architecture, design decisions, and implementation details, see [report.md](report.md)**
+
+**🎨 For architecture diagrams, see [docs/ARCHITECTURE_DIAGRAMS.md](docs/ARCHITECTURE_DIAGRAMS.md)**
+
+---
+
+## 🏗️ Architecture Components
+
+| Component | Environment | Purpose |
+|-----------|-------------|---------|
+| ![Airflow](docs/airflow.svg) **Airflow** | Local | Orchestrates DBT transformations (hourly schedule) |
+| ![DBT](docs/dbt.svg) **DBT** | Local + CI/CD | Data transformations (Bronze → Silver → Gold) |
+| ![GitHub Actions](docs/github-action.svg) **GitHub Actions** | CI/CD | Automated testing & deployment |
+| **SQL Server** | Local + CI/CD | AdventureWorks 2014 source database |
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Docker & Docker Compose
 - Git
-- Basic understanding of SQL, DBT, and Airflow
-- Access to source SQL Server database
+- 8GB+ RAM (for SQL Server container)
 
-## Project Structure and Components
-
-```
-dbt_airflow_project/
-├── airflow/
-│   ├── dags/                  # Contains Airflow DAG definitions
-│   │   └── dbt_dag.py        # DAG that orchestrates DBT transformations
-│   └── logs/                  # Airflow execution logs
-├── dbt/
-│   ├── models/               # Contains all DBT data models
-│   │   ├── staging/         # First layer: Raw data cleaning and standardization
-│   │   │   ├── stg_sales_orders.sql    # Example staging model
-│   │   │   └── schema.yml              # Model tests and documentation
-│   │   └── marts/           # Final layer: Business-level transformations
-│   ├── dbt_project.yml      # DBT project configurations
-│   ├── packages.yml         # External DBT package dependencies
-│   └── profiles.yml         # Database connection profiles
-└── docker-compose.yml       # Container orchestration configuration
-```
-
-### Component Details
-
-#### 1. Airflow Components
-- **dags/**:
-  - Purpose: Stores Airflow DAG (Directed Acyclic Graph) definitions
-  - Contents: Python files defining workflow orchestration
-  - Key File: `dbt_dag.py` - Orchestrates the DBT transformation pipeline
-  - Usage: Schedules and monitors DBT model runs and tests
-
-- **logs/**:
-  - Purpose: Contains Airflow execution logs
-  - Usage: Debugging and monitoring task execution
-  - Retention: Typically keeps logs for last 30 days
-
-#### 2. DBT Components
-- **models/staging/**:
-  - Purpose: First layer of transformation
-  - Contents: SQL models that clean and standardize raw data
-  - Example: `stg_sales_orders.sql` combines and standardizes sales order tables
-  - Materialization: Usually materialized as views for flexibility
-
-- **models/marts/**:
-  - Purpose: Final transformation layer
-  - Contents: Business-level transformations ready for reporting
-  - Materialization: Usually materialized as tables for performance
-  - Usage: Direct connection to BI tools
-
-- **dbt_project.yml**:
-  - Purpose: DBT project configuration
-  - Contents:
-    - Project name and version
-    - Model configurations
-    - Materialization settings
-    - Custom macro configurations
-
-- **packages.yml**:
-  - Purpose: Manages external DBT packages
-  - Current Packages:
-    - dbt-utils: Provides additional SQL macros and functions
-  - Usage: Install packages using `dbt deps`
-
-- **profiles.yml**:
-  - Purpose: Database connection configuration
-  - Contents:
-    - Connection credentials
-    - Target database settings
-    - Environment-specific configurations
-
-#### 3. Docker Components
-- **docker-compose.yml**:
+### 1️⃣ Clone Repository
+```bash
+git clone <repository-url>
+cd dataops
   - Purpose: Container orchestration
   - Services Defined:
     1. **airflow-webserver**: Web interface for Airflow
@@ -148,259 +97,227 @@ The following components from the original structure were removed as they weren'
 
 ### 1. Initial Setup
 
-1.1. Clone the repository:
+```
+
+### 2️⃣ Start Services
 ```bash
-git clone <repository-url>
-cd dbt_airflow_project
-```
-
-1.2. Create necessary directories:
-```bash
-mkdir -p airflow/dags airflow/logs dbt/models/{staging,intermediate,marts}
-```
-
-### 2. Docker Configuration
-
-2.1. Create `docker-compose.yml` with the following services:
-- Airflow Webserver
-- Airflow Scheduler
-- PostgreSQL (Airflow metadata database)
-- SQL Server (Source database)
-- DBT container
-
-2.2. Build custom Docker images:
-```bash
-docker-compose build
-```
-
-### 3. DBT Configuration
-
-3.1. Configure DBT project (`dbt_project.yml`):
-```yaml
-name: 'dbt_sqlserver_project'
-version: '1.0.0'
-config-version: 2
-profile: 'default'
-
-model-paths: ["models"]
-test-paths: ["tests"]
-macro-paths: ["macros"]
-
-target-path: "target"
-clean-targets:
-    - "target"
-    - "dbt_packages"
-    - "logs"
-
-models:
-  dbt_sqlserver_project:
-    staging:
-      materialized: view
-    intermediate:
-      materialized: table
-    marts:
-      materialized: table
-```
-
-3.2. Configure DBT profiles (`profiles.yml`):
-```yaml
-default:
-  target: dev
-  outputs:
-    dev:
-      type: sqlserver
-      driver: 'ODBC Driver 17 for SQL Server'
-      server: sqlserver
-      port: 1433
-      database: AdventureWorks
-      schema: dbo
-      user: sa
-      password: YourStrong@Passw0rd
-      threads: 4
-```
-
-3.3. Install DBT packages (`packages.yml`):
-```yaml
-packages:
-  - package: dbt-labs/dbt_utils
-    version: 1.1.1
-```
-
-### 4. Model Development
-
-4.1. Create staging models:
-- Create models under `dbt/models/staging/`
-- Example: `stg_sales_orders.sql`
-```sql
-with source_sales_order_header as (
-    select * from {{ source('adventure_works', 'SalesOrderHeader') }}
-),
-source_sales_order_detail as (
-    select * from {{ source('adventure_works', 'SalesOrderDetail') }}
-)
-
-select
-    soh.SalesOrderID,
-    sod.SalesOrderDetailID as order_detail_id,
-    soh.OrderDate,
-    soh.DueDate,
-    soh.ShipDate,
-    soh.Status as order_status,
-    soh.CustomerID,
-    soh.SalesPersonID,
-    sod.ProductID,
-    sod.OrderQty,
-    sod.UnitPrice,
-    sod.UnitPriceDiscount,
-    sod.LineTotal
-from source_sales_order_header soh
-left join source_sales_order_detail sod
-    on soh.SalesOrderID = sod.SalesOrderID
-```
-
-4.2. Add tests in `schema.yml`:
-```yaml
-version: 2
-
-models:
-  - name: stg_sales_orders
-    columns:
-      - name: sales_order_id
-        tests:
-          - not_null
-      - name: order_detail_id
-        tests:
-          - not_null
-    tests:
-      - dbt_utils.unique_combination_of_columns:
-          combination_of_columns:
-            - sales_order_id
-            - order_detail_id
-```
-
-### 5. Airflow DAG Configuration
-
-5.1. Create DBT DAG (`airflow/dags/dbt_dag.py`):
-```python
-from airflow import DAG
-from airflow.providers.docker.operators.docker import DockerOperator
-from datetime import datetime, timedelta
-
-default_args = {
-    'owner': 'airflow',
-    'depends_on_past': False,
-    'start_date': datetime(2025, 4, 13),
-    'email_on_failure': False,
-    'email_on_retry': False,
-    'retries': 1,
-    'retry_delay': timedelta(minutes=5)
-}
-
-dag = DAG(
-    'dbt_transform',
-    default_args=default_args,
-    description='DBT transformation pipeline',
-    schedule_interval=timedelta(days=1)
-)
-
-dbt_run = DockerOperator(
-    task_id='dbt_run',
-    image='dbt_airflow_project-dbt',
-    command='dbt run',
-    docker_url='unix://var/run/docker.sock',
-    network_mode='bridge',
-    dag=dag
-)
-
-dbt_test = DockerOperator(
-    task_id='dbt_test',
-    image='dbt_airflow_project-dbt',
-    command='dbt test',
-    docker_url='unix://var/run/docker.sock',
-    network_mode='bridge',
-    dag=dag
-)
-
-dbt_run >> dbt_test
-```
-
-### 6. Starting the Project
-
-6.1. Initialize the containers:
-```bash
+# Build and start all containers
+docker-compose build --no-cache
 docker-compose up -d
+
+# Wait for services to be ready (~2 minutes)
+docker-compose logs -f
 ```
 
-6.2. Install DBT dependencies:
+### 3️⃣ Initialize Database
 ```bash
+# Restore AdventureWorks database
+docker-compose exec sqlserver /tmp/restore_db.sh
+
+# Create DBT user
+docker-compose exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "YourStrong@Passw0rd" \
+  -Q "CREATE LOGIN imrandbtnew WITH PASSWORD = 'Imran@12345'; USE AdventureWorks2014; CREATE USER imrandbtnew FOR LOGIN imrandbtnew; ALTER ROLE db_owner ADD MEMBER imrandbtnew;"
+```
+
+### 4️⃣ Run DBT Transformations
+```bash
+# Install DBT packages
 docker-compose exec dbt dbt deps
-```
 
-6.3. Run DBT models:
-```bash
+# Run all models (Bronze → Silver → Gold)
 docker-compose exec dbt dbt run
-```
 
-6.4. Test DBT models:
-```bash
+# Run tests
 docker-compose exec dbt dbt test
+
+# Generate documentation
+docker-compose exec dbt dbt docs generate
+docker-compose exec dbt dbt docs serve --port 8081
 ```
 
-### 7. Accessing Services
+### 5️⃣ Access Services
+- **Airflow UI**: http://localhost:8080 (admin/admin)
+- **DBT Docs**: http://localhost:8081
+- **SQL Server**: localhost:1433 (sa/YourStrong@Passw0rd)
 
-- Airflow UI: http://localhost:8080
-  - Username: airflow
-  - Password: airflow
-- SQL Server:
-  - Host: localhost
-  - Port: 1433
-  - Username: sa
-  - Password: YourStrong@Passw0rd
+---
 
-## Why Containers?
+## 📂 Project Structure
 
-We use containers for several important reasons:
+```
+dataops/
+├── .github/workflows/          # CI/CD pipelines
+│   ├── dbt-ci.yml             # DBT compilation & docs generation
+│   ├── python-quality.yml     # Python linting
+│   ├── pr-check.yml           # PR validation
+│   ├── deploy.yml             # Automated deployment
+│   └── rollback.yml           # Rollback workflow
+├── airflow/
+│   ├── dags/
+│   │   └── dbt_dag.py         # Orchestration DAG (Bronze → Silver → Gold)
+│   └── logs/                  # Execution logs
+├── dbt/
+│   ├── models/
+│   │   ├── bronze/            # Raw data extraction (views)
+│   │   ├── silver/            # Business transformations (tables)
+│   │   └── gold/              # Aggregated metrics (tables)
+│   ├── tests/                 # Custom data quality tests
+│   ├── dbt_project.yml        # DBT configuration
+│   ├── profiles.yml           # Database connections
+│   └── packages.yml           # dbt_utils, dbt_expectations
+├── docs/                      # Architecture diagrams & images
+├── docker-compose.yml         # Container orchestration
+└── README.md                  # This file
+```
 
-1. **Isolation**: Each service runs in its own container, preventing conflicts between dependencies and ensuring consistent environments.
+---
 
-2. **Reproducibility**: Docker ensures that the development, testing, and production environments are identical.
+## 🔧 Development Workflows
 
-3. **Scalability**: Containers can be easily scaled up or down based on workload requirements.
+### Local Development (Airflow + Docker)
+```bash
+# Run specific model layer
+docker-compose exec dbt dbt run --models bronze
+docker-compose exec dbt dbt run --models silver
+docker-compose exec dbt dbt run --models gold
 
-4. **Version Control**: Container configurations are version-controlled, making it easy to track changes and roll back if needed.
+# Run specific model with dependencies
+docker-compose exec dbt dbt run --select +slvr_sales_orders+
 
-5. **Portability**: The project can run on any system that supports Docker, regardless of the underlying OS or infrastructure.
+# Test specific layer
+docker-compose exec dbt dbt test --models bronze
 
-## CI/CD Pipeline
+# Trigger Airflow DAG manually
+docker-compose exec airflow-webserver airflow dags trigger dbt_transform
+```
 
-This project implements a comprehensive CI/CD pipeline with automated testing, deployment, and monitoring.
+### CI/CD (GitHub Actions)
+```bash
+# On every push/PR:
+# ✅ SQL linting (SQLFluff)
+# ✅ Python quality checks (Flake8, Black, Pylint)
+# ✅ DBT compilation
+# ✅ PR validation
 
-### Continuous Integration (CI)
+# On merge to develop/main:
+# ✅ Automated deployment
+# ✅ DBT run + test
+# ✅ Documentation generation
+# ✅ Artifact upload
+```
 
-**Automated Checks on Every PR:**
-- ✅ SQL linting with SQLFluff
-- ✅ Python code quality (Black, Flake8, Pylint)
-- ✅ DBT model compilation
-- ✅ Pull request validation (title format, file size, conflicts)
-- ✅ Automated documentation generation
+---
 
-**Workflows:**
-- `.github/workflows/dbt-ci.yml` - DBT compilation and SQL linting
-- `.github/workflows/python-quality.yml` - Python code quality checks
-- `.github/workflows/pr-check.yml` - PR validation
+## 📊 Data Pipeline
 
-### Continuous Deployment (CD)
+### Medallion Architecture Layers
 
-**Environment-Specific Deployments:**
+| Layer | Materialization | Purpose | Models |
+|-------|-----------------|---------|--------|
+| **Bronze** | Views | Raw data extraction | `brnz_sales_orders`, `brnz_customers`, `brnz_products` |
+| **Silver** | Tables | Business transformations | `slvr_sales_orders`, `slvr_customers`, `slvr_products` |
+| **Gold** | Tables | Aggregated metrics | `gld_sales_summary`, `gld_customer_metrics`, `gld_product_performance` |
 
-| Environment | Branch | Trigger | Approval | Workflow |
-|-------------|--------|---------|----------|----------|
-| **Development** | `develop` | Auto on push | No | `deploy-dev.yml` |
-| **Production** | `main` | Auto on push | Recommended | `deploy-prod.yml` |
+**Data Flow**:
+```
+AdventureWorks (Source) → Bronze (Extract) → Silver (Transform) → Gold (Aggregate)
+```
 
-**Deployment Features:**
-- ✅ Pre-deployment validation checks
-- ✅ Automated DBT dependency installation
+---
+
+## 🧪 Testing
+
+### Schema Tests
+```yaml
+# dbt/models/*/schema.yml
+tests:
+  - unique
+  - not_null
+  - relationships
+  - accepted_values
+  - dbt_expectations.expect_column_values_to_be_of_type
+```
+
+### Custom Tests
+- `test_no_future_dates.sql` - Validates date columns
+- `test_positive_values.sql` - Ensures numeric constraints
+- `test_positive_revenue.sql` - Business logic validation
+
+---
+
+## 🚢 Deployment
+
+### Environments
+
+| Branch | Environment | Trigger | Auto-deploy |
+|--------|-------------|---------|-------------|
+| `develop` | Development | Push | ✅ Yes |
+| `main` | Production | Push | ✅ Yes |
+
+### Rollback
+```bash
+# Via GitHub Actions UI:
+# Actions → "Manual Rollback" → Run workflow
+# Inputs: target commit, environment, reason
+```
+
+---
+
+## 📖 Documentation
+
+- **[report.md](report.md)** - Complete project report with architecture, design decisions
+- **[docs/ARCHITECTURE_DIAGRAMS.md](docs/ARCHITECTURE_DIAGRAMS.md)** - Mermaid diagrams
+- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Common issues and solutions
+
+---
+
+## 🛠️ Troubleshooting
+
+### Common Issues
+
+**Container won't start:**
+```bash
+docker-compose down -v
+docker system prune -a
+docker-compose build --no-cache && docker-compose up -d
+```
+
+**DBT connection error:**
+```bash
+docker-compose exec dbt dbt debug
+```
+
+**Airflow DAG not appearing:**
+```bash
+docker-compose logs airflow-scheduler
+docker-compose restart airflow-scheduler
+```
+
+See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for more details.
+
+---
+
+## 🤝 Contributing
+
+1. Create feature branch: `git checkout -b feature/your-feature`
+2. Make changes and test locally
+3. Push and create Pull Request
+4. Wait for CI checks to pass
+5. Merge after approval
+
+---
+
+## 📄 License
+
+[LICENSE](LICENSE)
+
+---
+
+## 👥 Team
+
+- **Data Engineering Team**
+- Course: DataOps / Data Engineering
+- Year: 2025
 - ✅ Model compilation and execution
 - ✅ Data quality test execution
 - ✅ Post-deployment health checks

@@ -151,9 +151,31 @@ If you see "failed to compute cache key" errors:
 Default ports: 8080 (Airflow), 1433 (SQL Server), 5432 (Postgres). Modify in `docker-compose.yml` if conflicts occur.
 
 ## CI/CD Pipeline
-- **DBT CI** (`.github/workflows/dbt-ci.yml`): Lints SQL with SQLFluff, runs Python linting
-- **Python Quality** (`.github/workflows/python-quality.yml`): Black, Flake8, Pylint on Airflow DAGs
-- Triggers: Pushes to `main`, `develop`, `feature/**` branches
+
+### Continuous Integration (CI)
+- `.github/workflows/dbt-ci.yml`: SQL linting (SQLFluff), DBT compilation, docs generation
+- `.github/workflows/python-quality.yml`: Black, Flake8, Pylint on Airflow DAGs
+- `.github/workflows/pr-check.yml`: PR validation (title format, file size, conflicts)
+- Triggers: Pushes to `main`, `develop`, `feature/**` branches + Pull Requests
+
+### Continuous Deployment (CD)
+- `.github/workflows/deploy.yml`: Environment-specific deployments
+  - **develop** branch → Development environment (auto-deploy)
+  - **main** branch → Production environment (auto-deploy)
+  - Sets up SQL Server service, restores AdventureWorks DB, creates DBT users
+  - Runs: `dbt deps` → `dbt compile` → `dbt run` → `dbt test`
+  - Generates deployment summaries and artifacts
+
+- `.github/workflows/rollback.yml`: Manual rollback capability
+  - Workflow dispatch with inputs: target commit, environment, reason
+  - Validates target commit, checks DBT package integrity
+  - Rolls back to specified commit with optional test skipping
+
+### Deployment Artifacts
+DBT docs auto-generated and uploaded as artifacts (30-day retention):
+- `dbt/target/index.html` - Interactive documentation
+- `dbt/target/catalog.json` - Data catalog
+- `dbt/target/manifest.json` - Model lineage and metadata
 
 ## Key Files Reference
 - `dbt/dbt_project.yml`: Project config, materialization defaults

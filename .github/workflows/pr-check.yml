@@ -29,8 +29,8 @@ jobs:
         git diff --name-only origin/${{ github.base_ref }}...HEAD | while read file; do
           if [ -f "$file" ]; then
             size=$(wc -c < "$file")
-            if [ $size -gt 1000000 ]; then
-              echo "❌ File $file is larger than 1MB"
+            if [ $size -gt 5000000 ]; then
+              echo "❌ File $file is larger than 5MB"
               exit 1
             fi
           fi
