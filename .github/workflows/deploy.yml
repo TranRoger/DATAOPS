@@ -108,6 +108,13 @@ jobs:
             STATS = 10;
         "
 
+        echo "👤 Creating database users..."
+        /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -d AdventureWorks2014 -Q "
+          CREATE LOGIN imrandbtnew WITH PASSWORD = '${{ env.DBT_PASSWORD }}';
+          CREATE USER imrandbtnew FOR LOGIN imrandbtnew;
+          ALTER ROLE db_owner ADD MEMBER imrandbtnew;
+        "
+
         echo "✅ AdventureWorks2014 database restored successfully"
 
     - name: Set up Python
@@ -227,6 +234,11 @@ jobs:
           CREATE LOGIN dbt_user WITH PASSWORD = '${{ env.DBT_PASSWORD }}';
           CREATE USER dbt_user FOR LOGIN dbt_user;
           ALTER ROLE db_owner ADD MEMBER dbt_user;
+
+          CREATE LOGIN imrandbtnew WITH PASSWORD = '${{ env.DBT_PASSWORD }}';
+          CREATE USER imrandbtnew FOR LOGIN imrandbtnew;
+          ALTER ROLE db_owner ADD MEMBER imrandbtnew;
+
           CREATE SCHEMA bronze;
           CREATE SCHEMA silver;
           CREATE SCHEMA gold;
