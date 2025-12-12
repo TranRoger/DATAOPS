@@ -1,9 +1,6 @@
 # DataOps Project - Implementation Report
 
 **Project**: DBT Data Transformation Pipeline with Airflow Orchestration
-**Team**: [Your Team Name]
-**Date**: December 10, 2025
-**Branch**: `feature/dataops-setup`
 
 ---
 
