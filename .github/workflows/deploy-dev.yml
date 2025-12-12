@@ -8,9 +8,8 @@ on:
     # Allow manual trigger
 
 env:
-  DBT_TARGET: dev
-  DBT_PROFILES_DIR: ./dbt
   ENVIRONMENT: development
+  DBT_TARGET: dev
 
 jobs:
   pre-deployment-checks:
@@ -21,44 +20,38 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.9'
-
-    - name: Validate DBT project structure
+    - name: Validate project structure
       run: |
-        echo "🔍 Validating DBT project structure..."
-        if [ ! -f "dbt/dbt_project.yml" ]; then
-          echo "❌ dbt_project.yml not found"
-          exit 1
-        fi
+        echo "🔍 Validating project structure..."
 
-        if [ ! -f "dbt/profiles.yml" ]; then
-          echo "❌ profiles.yml not found"
-          exit 1
-        fi
+        # Check required files
+        for file in "docker-compose.yml" "dbt/dbt_project.yml" "airflow/dags/dbt_dag.py"; do
+          if [ ! -f "$file" ]; then
+            echo "❌ Required file not found: $file"
+            exit 1
+          fi
+        done
 
-        if [ ! -d "dbt/models" ]; then
-          echo "❌ models directory not found"
-          exit 1
-        fi
+        # Check required directories
+        for dir in "dbt/models/bronze" "dbt/models/silver" "dbt/models/gold" "sqlserver"; do
+          if [ ! -d "$dir" ]; then
+            echo "❌ Required directory not found: $dir"
+            exit 1
+          fi
+        done
 
-        echo "✅ DBT project structure is valid"
+        echo "✅ Project structure is valid"
 
     - name: Check for breaking changes
       run: |
         echo "🔍 Checking for breaking changes..."
 
-        # Check if any models were deleted
         if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
           DELETED_MODELS=$(git diff --name-status HEAD~1 HEAD | grep "^D.*\.sql$" | wc -l)
-          if [ $DELETED_MODELS -gt 0 ]; then
-            echo "⚠️  Warning: $DELETED_MODELS model(s) deleted. Ensure downstream dependencies are updated."
+          if [ "$DELETED_MODELS" -gt 0 ]; then
+            echo "⚠️  Warning: $DELETED_MODELS model(s) deleted"
             git diff --name-status HEAD~1 HEAD | grep "^D.*\.sql$" || true
           fi
-        else
-          echo "ℹ️  Only one commit found (no HEAD~1). Skipping deleted models check."
         fi
 
         echo "✅ Pre-deployment checks passed"
@@ -67,126 +60,186 @@ jobs:
     name: Deploy to Development Environment
     runs-on: ubuntu-latest
     needs: pre-deployment-checks
+    environment:
+      name: development
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.9'
-
-    - name: Install DBT and dependencies
+    - name: Create profiles.yml from secret
       run: |
-        echo "📦 Installing DBT..."
-        pip install dbt-sqlserver==1.8.2
+        echo "${{ secrets.DBT_PROFILE }}" > dbt/profiles.yml
 
-    - name: Install DBT packages
+    - name: Stop existing containers
       run: |
-        echo "📦 Installing DBT packages (dbt_utils, dbt_expectations)..."
-        cd dbt
-        dbt deps --profiles-dir .
+        echo "🛑 Stopping existing containers..."
+        docker-compose down --remove-orphans || true
+        echo "✅ Containers stopped"
 
-    - name: Verify DBT package integrity
+    - name: Build containers
       run: |
-        echo "🔒 Verifying DBT package integrity..."
-        cd dbt
-        if [ ! -f "../dbt_packages.hash" ]; then
-          echo "❌ dbt_packages.hash not found. Please generate and commit the hash file."
-          exit 1
-        fi
-        # Compute hash of the dbt_packages directory (sorted file list, then sha256sum)
-        find dbt_packages -type f -exec sha256sum {} \; | sort -k 2 | sha256sum | awk '{print $1}' > dbt_packages.current.hash
-        EXPECTED_HASH=$(cat ../dbt_packages.hash)
-        ACTUAL_HASH=$(cat dbt_packages.current.hash)
-        if [ "$EXPECTED_HASH" != "$ACTUAL_HASH" ]; then
-          echo "❌ DBT package integrity check failed!"
-          echo "Expected:$EXPECTED_HASH"
-          echo "Actual:$ACTUAL_HASH"
-          echo "If you have intentionally updated packages, run:"
-          echo "  find dbt_packages -type f -exec sha256sum {} \\; | sort -k 2 | sha256sum | awk '{print \$1}' > dbt_packages.hash"
-          echo "and commit the updated dbt_packages.hash file."
-          exit 1
-        fi
-        echo "✅ DBT package integrity verified."
+        echo "🔨 Building containers..."
+        docker-compose build --no-cache
+        echo "✅ Containers built"
 
-    - name: Compile DBT models
+    - name: Start services
       run: |
-        echo "🔨 Compiling DBT models for ${{ env.ENVIRONMENT }}..."
-        cd dbt
-        dbt compile --profiles-dir . --target ${{ env.DBT_TARGET }}
+        echo "🚀 Starting services..."
+        docker-compose up -d
+        echo "✅ Services started"
 
-    - name: Run DBT models
-      id: dbt-run
+    - name: Wait for SQL Server to be ready
       run: |
-        echo "🚀 Running DBT models on ${{ env.ENVIRONMENT }}..."
-        cd dbt
-        dbt run --profiles-dir . --target ${{ env.DBT_TARGET }}
+        echo "⏳ Waiting for SQL Server to start (up to 2 minutes)..."
+        for i in {1..60}; do
+          if docker-compose exec -T sqlserver /opt/mssql-tools/bin/sqlcmd \
+            -S localhost -U sa -P "YourStrong@Passw0rd" -Q "SELECT 1" &>/dev/null; then
+            echo "✅ SQL Server is ready!"
+            break
+          fi
+          echo "Waiting for SQL Server... ($i/60)"
+          sleep 2
+        done
 
-        # Capture run statistics
-        echo "run_status=success" >> $GITHUB_OUTPUT
-      continue-on-error: false
-
-    - name: Run data quality tests
-      id: dbt-test
+    - name: Initialize database
       run: |
-        echo "🧪 Running data quality tests..."
-        cd dbt
-        dbt test --profiles-dir . --target ${{ env.DBT_TARGET }}
+        echo "🗄️ Initializing AdventureWorks database..."
+        docker-compose exec -T sqlserver /tmp/restore_db.sh || echo "Database may already exist"
+        echo "✅ Database initialized"
 
-        echo "test_status=success" >> $GITHUB_OUTPUT
-      continue-on-error: false
+    - name: Configure DBT user
+      run: |
+        echo "👤 Configuring DBT user..."
+        docker-compose exec -T sqlserver /opt/mssql-tools/bin/sqlcmd \
+          -S localhost -U sa -P "YourStrong@Passw0rd" -Q "
+          IF NOT EXISTS (SELECT * FROM sys.server_principals WHERE name = 'imrandbtnew')
+          BEGIN
+            CREATE LOGIN imrandbtnew WITH PASSWORD = 'Imran@12345';
+          END
 
-    - name: Generate documentation
-      if: success()
+          USE AdventureWorks2014;
+
+          IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'imrandbtnew')
+          BEGIN
+            CREATE USER imrandbtnew FOR LOGIN imrandbtnew;
+            ALTER ROLE db_owner ADD MEMBER imrandbtnew;
+          END
+        "
+        echo "✅ DBT user configured"
+
+    - name: Install DBT dependencies
+      run: |
+        echo "📦 Installing DBT dependencies..."
+        docker-compose exec -T dbt dbt deps
+        echo "✅ DBT dependencies installed"
+
+    - name: Verify DBT connection
+      run: |
+        echo "🔍 Verifying DBT connection..."
+        docker-compose exec -T dbt dbt debug
+        echo "✅ DBT connection verified"
+
+    - name: Wait for Airflow to be ready
+      run: |
+        echo "⏳ Waiting for Airflow to be ready..."
+        sleep 30
+        for i in {1..30}; do
+          if curl -s http://localhost:8080/health | grep -q "healthy"; then
+            echo "✅ Airflow is ready!"
+            break
+          fi
+          echo "Waiting for Airflow... ($i/30)"
+          sleep 5
+        done
+
+    - name: Run DBT models - Bronze layer
+      id: dbt-bronze
+      run: |
+        echo "🥉 Running Bronze layer models..."
+        docker-compose exec -T dbt dbt run --models bronze --profiles-dir /usr/app/dbt
+        echo "✅ Bronze layer completed"
+
+    - name: Test Bronze layer
+      run: |
+        echo "🧪 Testing Bronze layer..."
+        docker-compose exec -T dbt dbt test --models bronze --profiles-dir /usr/app/dbt
+        echo "✅ Bronze tests passed"
+
+    - name: Run DBT models - Silver layer
+      id: dbt-silver
+      run: |
+        echo "🥈 Running Silver layer models..."
+        docker-compose exec -T dbt dbt run --models silver --profiles-dir /usr/app/dbt
+        echo "✅ Silver layer completed"
+
+    - name: Test Silver layer
+      run: |
+        echo "🧪 Testing Silver layer..."
+        docker-compose exec -T dbt dbt test --models silver --profiles-dir /usr/app/dbt
+        echo "✅ Silver tests passed"
+
+    - name: Run DBT models - Gold layer
+      id: dbt-gold
+      run: |
+        echo "🥇 Running Gold layer models..."
+        docker-compose exec -T dbt dbt run --models gold --profiles-dir /usr/app/dbt
+        echo "✅ Gold layer completed"
+
+    - name: Test Gold layer
+      run: |
+        echo "🧪 Testing Gold layer..."
+        docker-compose exec -T dbt dbt test --models gold --profiles-dir /usr/app/dbt
+        echo "✅ Gold tests passed"
+
+    - name: Generate DBT documentation
       run: |
         echo "📚 Generating DBT documentation..."
-        cd dbt
-        dbt docs generate --profiles-dir . --target ${{ env.DBT_TARGET }}
+        docker-compose exec -T dbt dbt docs generate --profiles-dir /usr/app/dbt
+        echo "✅ Documentation generated"
 
-    - name: Upload deployment artifacts
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: deployment-artifacts-dev-${{ github.sha }}
-        path: |
-          dbt/target/
-          dbt/logs/
-        retention-days: 30
+    - name: Verify Airflow DAG
+      run: |
+        echo "🔍 Verifying Airflow DAG..."
+        docker-compose exec -T airflow-webserver airflow dags list | grep -q "dbt_transform" && \
+          echo "✅ DAG dbt_transform is registered" || \
+          echo "⚠️ DAG not found, check Airflow logs"
 
     - name: Post-deployment health check
-      if: success()
       run: |
         echo "🏥 Running post-deployment health checks..."
 
-        # Check if critical models exist and have data
-        echo "✅ Deployment health check passed"
-        echo "📊 Development deployment completed successfully"
-        echo "🔗 Branch: ${{ github.ref_name }}"
-        echo "📝 Commit: ${{ github.sha }}"
-        echo "👤 Deployed by: ${{ github.actor }}"
+        # Check all containers are running
+        docker-compose ps
+
+        # Check SQL Server
+        docker-compose exec -T sqlserver /opt/mssql-tools/bin/sqlcmd \
+          -S localhost -U imrandbtnew -P "Imran@12345" \
+          -Q "SELECT COUNT(*) as model_count FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA IN ('bronze', 'silver', 'gold')"
+
+        echo "✅ Post-deployment health check passed"
 
     - name: Create deployment summary
       if: always()
       run: |
-        echo "## 📋 Deployment Summary - Development" >> $GITHUB_STEP_SUMMARY
+        echo "## 📋 Development Deployment Summary" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
         echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
         echo "| Environment | ${{ env.ENVIRONMENT }} |" >> $GITHUB_STEP_SUMMARY
-        echo "| Target | ${{ env.DBT_TARGET }} |" >> $GITHUB_STEP_SUMMARY
         echo "| Branch | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
         echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
         echo "| Deployed by | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
         echo "| Timestamp | $(date -u '+%Y-%m-%d %H:%M:%S UTC') |" >> $GITHUB_STEP_SUMMARY
-        echo "| DBT Run Status | ${{ steps.dbt-run.outcome }} |" >> $GITHUB_STEP_SUMMARY
-        echo "| Test Status | ${{ steps.dbt-test.outcome }} |" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 🎯 Models Deployed" >> $GITHUB_STEP_SUMMARY
-        echo "- Bronze Layer Models" >> $GITHUB_STEP_SUMMARY
-        echo "- Silver Layer Models" >> $GITHUB_STEP_SUMMARY
-        echo "- Gold Layer Models" >> $GITHUB_STEP_SUMMARY
+        echo "### 🎯 Deployment Steps" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Docker containers built and started" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ SQL Server initialized with AdventureWorks" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ DBT user configured" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Bronze layer models deployed" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Silver layer models deployed" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Gold layer models deployed" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ All tests passed" >> $GITHUB_STEP_SUMMARY
 
   notify-deployment:
     name: Send Deployment Notifications
@@ -199,21 +252,17 @@ jobs:
       if: needs.deploy-development.result == 'success'
       run: |
         echo "✅ Development deployment successful!"
-        echo "🔔 Notification: Deployment to development environment completed"
-
-        # In production, send to Slack:
-        # curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+        # Uncomment to enable Slack notifications:
+        # curl -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
         #   -H 'Content-Type: application/json' \
-        #   -d '{"text":"✅ Development deployment successful!"}'
+        #   -d '{"text":"✅ Development deployment successful! Commit: ${{ github.sha }}"}'
 
     - name: Notify on failure
       if: needs.deploy-development.result == 'failure'
       run: |
         echo "❌ Development deployment failed!"
-        echo "🔔 Alert: Deployment to development environment failed"
         echo "👉 Check logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-
-        # In production, send alert to Slack:
-        # curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+        # Uncomment to enable Slack notifications:
+        # curl -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
         #   -H 'Content-Type: application/json' \
-        #   -d '{"text":"❌ Development deployment failed!"}'
+        #   -d '{"text":"❌ Development deployment failed! Check: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"}'

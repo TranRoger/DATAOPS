@@ -1,8 +1,6 @@
 services:
   sqlserver:
-    build:
-      context: ./sqlserver
-      dockerfile: Dockerfile
+    image: mcr.microsoft.com/mssql/server:2019-latest
     environment:
       - ACCEPT_EULA=Y
       - SA_PASSWORD=YourStrong@Passw0rd
@@ -11,6 +9,10 @@ services:
       - "1433:1433"
     volumes:
       - sqlserver_data:/var/opt/mssql
+      - ./sqlserver/init.sh:/tmp/init.sh
+      - ./sqlserver/restore_db.sh:/tmp/restore_db.sh
+    entrypoint: /bin/bash
+    command: /tmp/init.sh
     networks:
       - dbt_airflow_network
 
@@ -67,6 +69,8 @@ services:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__CORE__FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+    env_file:
+      - .env
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
