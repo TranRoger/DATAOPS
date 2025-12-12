@@ -118,7 +118,8 @@ jobs:
     - name: Install DBT
       run: |
         echo "📦 Installing DBT..."
-        pip install dbt-sqlserver==1.8.2
+        pip install dbt-sqlserver==1.8.5
+        pip install dbt-fabric
 
     - name: Create profiles.yml from secret
       run: |
