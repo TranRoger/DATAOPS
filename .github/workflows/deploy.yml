@@ -59,127 +59,30 @@ jobs:
           echo "🔧 Deploying to DEVELOPMENT environment"
         fi
 
-    - name: Install SQL Server tools
-      run: |
-        curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
-        curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
-        sudo apt-get update
-        sudo ACCEPT_EULA=Y apt-get install -y mssql-tools18 unixodbc-dev
-        echo 'export PATH="$PATH:/opt/mssql-tools18/bin"' >> ~/.bashrc
-
-    - name: Wait for SQL Server to be ready
-      run: |
-        echo "⏳ Waiting for SQL Server to be ready..."
-        for i in {1..30}; do
-          if /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -Q "SELECT 1" &>/dev/null; then
-            echo "✅ SQL Server is ready!"
-            break
-          fi
-          echo "Waiting... attempt $i/30"
-          sleep 5
-        done
-
-    - name: Download and restore AdventureWorks database
-      run: |
-        echo "📥 Downloading AdventureWorks2014 backup..."
-        # Download the backup file
-        curl -L -o /tmp/AdventureWorks2014.bak "https://github.com/Microsoft/sql-server-samples/releases/download/adventureworks/AdventureWorks2014.bak"
-
-        echo "🔄 Copying backup file into SQL Server container..."
-        # Dynamically find the running SQL Server container ID
-        CONTAINER_ID=$(docker ps --filter "ancestor=mcr.microsoft.com/mssql/server:2019-latest" --format "{{.ID}}")
-
-        # Verify container was found before proceeding
-        if [ -z "$CONTAINER_ID" ]; then
-          echo "❌ Error: SQL Server container not found!"
-          exit 1
-        fi
-
-        # Copy file into the container
-        docker cp /tmp/AdventureWorks2014.bak $CONTAINER_ID:/tmp/AdventureWorks2014.bak
-
-        echo "📦 Restoring AdventureWorks2014 database..."
-        # Run the restore command using sqlcmd inside the runner (connecting to localhost)
-        # Note: Added NO_WAIT and STATS for better logging
-        /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -Q "
-          RESTORE DATABASE AdventureWorks2014
-          FROM DISK = '/tmp/AdventureWorks2014.bak'
-          WITH
-            MOVE 'AdventureWorks2014_Data' TO '/var/opt/mssql/data/AdventureWorks2014.mdf',
-            MOVE 'AdventureWorks2014_Log' TO '/var/opt/mssql/data/AdventureWorks2014_log.ldf',
-            REPLACE,
-            STATS = 10;
-        "
-
-        echo "👤 Creating DBT user and schemas..."
-        # Added -b flag to force exit on error
-        /opt/mssql-tools18/bin/sqlcmd -b -S localhost -U sa -P "$SA_PASSWORD" -C -d AdventureWorks2014 -Q "
-          -- Create dbt_user if not exists
-          IF NOT EXISTS (SELECT * FROM sys.server_principals WHERE name = 'dbt_user')
-          BEGIN
-            CREATE LOGIN dbt_user WITH PASSWORD = '${{ env.DBT_PASSWORD }}';
-          END
-
-          IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'dbt_user')
-          BEGIN
-            CREATE USER dbt_user FOR LOGIN dbt_user;
-            ALTER ROLE db_owner ADD MEMBER dbt_user;
-          END
-
-          -- Create imrandbtnew if not exists
-          IF NOT EXISTS (SELECT * FROM sys.server_principals WHERE name = 'imrandbtnew')
-          BEGIN
-            CREATE LOGIN imrandbtnew WITH PASSWORD = '${{ env.DBT_PASSWORD }}';
-          END
-
-          IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'imrandbtnew')
-          BEGIN
-            CREATE USER imrandbtnew FOR LOGIN imrandbtnew;
-            ALTER ROLE db_owner ADD MEMBER imrandbtnew;
-          END
-
-          -- Create Schemas
-          IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'bronze') EXEC('CREATE SCHEMA bronze');
-          IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'silver') EXEC('CREATE SCHEMA silver');
-          IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'gold') EXEC('CREATE SCHEMA gold');
-        "
-
-    - name: Set up Python
-      uses: actions/setup-python@v4
+    - name: Setup SQL Server
+      uses: ./.github/actions/setup-sqlserver
       with:
+        sa-password: ${{ secrets.SA_PASSWORD }}
+
+    - name: Restore AdventureWorks Database
+      uses: ./.github/actions/restore-adventureworks
+      with:
+        sa-password: ${{ secrets.SA_PASSWORD }}
+        dbt-password: ${{ secrets.DBT_PASSWORD }}
+
+    - name: Setup DBT Environment
+      uses: ./.github/actions/setup-dbt
+      with:
+        dbt-profile-content: ${{ secrets.DBT_PROFILE }}
+        dbt-version: '1.8.5'
         python-version: '3.9'
 
-    - name: Install DBT
-      run: |
-        echo "📦 Installing DBT..."
-        pip install dbt-sqlserver==1.8.5
-        pip install dbt-fabric
-
-    - name: Create profiles.yml from secret
-      run: |
-        cat <<EOF > dbt/profiles.yml
-        ${{ secrets.DBT_PROFILE }}
-        EOF
-
-    - name: Install DBT dependencies
-      run: |
-        cd dbt
-        echo "📦 Installing DBT packages..."
-        dbt deps --profiles-dir .
-
-    - name: Validate DBT project
-      run: |
-        cd dbt
-        echo "🔍 Validating DBT project structure..."
-        dbt debug --profiles-dir .
-        echo "✅ DBT project validation passed"
-
-    - name: Compile models (dry run)
-      run: |
-        cd dbt
-        echo "🔄 Compiling DBT models..."
-        dbt compile --profiles-dir .
-        echo "✅ DBT models compiled successfully"
+    - name: Validate and Compile DBT Models
+      uses: ./.github/actions/run-dbt-workflow
+      with:
+        target: ${{ steps.set-env.outputs.target }}
+        run-models: 'false'
+        run-tests: 'false'
 
     - name: Pre-deployment Summary
       run: |
@@ -221,115 +124,32 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    - name: Install SQL Server tools
-      run: |
-        curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
-        curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
-        sudo apt-get update
-        sudo ACCEPT_EULA=Y apt-get install -y mssql-tools18 unixodbc-dev
-
-    - name: Download and restore AdventureWorks database
-      run: |
-        echo "⏳ Waiting for SQL Server..."
-        for i in {1..30}; do
-          if /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -Q "SELECT 1" &>/dev/null; then
-            echo "✅ SQL Server is ready!"
-            break
-          fi
-          sleep 5
-        done
-
-        echo "📥 Downloading AdventureWorks2014 backup..."
-        curl -L -o /tmp/AdventureWorks2014.bak \
-          "https://github.com/Microsoft/sql-server-samples/releases/download/adventureworks/AdventureWorks2014.bak"
-
-        echo "📦 Copying backup file into SQL Server container..."
-        CONTAINER_ID=$(docker ps --filter "ancestor=mcr.microsoft.com/mssql/server:2019-latest" --format "{{.ID}}")
-        docker cp /tmp/AdventureWorks2014.bak $CONTAINER_ID:/tmp/AdventureWorks2014.bak
-
-        echo "🔧 Restoring AdventureWorks2014 database..."
-        /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -Q "
-          RESTORE DATABASE AdventureWorks2014
-          FROM DISK = '/tmp/AdventureWorks2014.bak'
-          WITH MOVE 'AdventureWorks2014_Data' TO '/var/opt/mssql/data/AdventureWorks2014.mdf',
-               MOVE 'AdventureWorks2014_Log' TO '/var/opt/mssql/data/AdventureWorks2014_log.ldf',
-               REPLACE;
-        "
-
-        echo "👤 Creating DBT user and schemas..."
-        # Added -b flag to force exit on error
-        /opt/mssql-tools18/bin/sqlcmd -b -S localhost -U sa -P "$SA_PASSWORD" -C -d AdventureWorks2014 -Q "
-          -- Create dbt_user if not exists
-          IF NOT EXISTS (SELECT * FROM sys.server_principals WHERE name = 'dbt_user')
-          BEGIN
-            CREATE LOGIN dbt_user WITH PASSWORD = '${{ env.DBT_PASSWORD }}';
-          END
-
-          IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'dbt_user')
-          BEGIN
-            CREATE USER dbt_user FOR LOGIN dbt_user;
-            ALTER ROLE db_owner ADD MEMBER dbt_user;
-          END
-
-          -- Create imrandbtnew if not exists
-          IF NOT EXISTS (SELECT * FROM sys.server_principals WHERE name = 'imrandbtnew')
-          BEGIN
-            CREATE LOGIN imrandbtnew WITH PASSWORD = '${{ env.DBT_PASSWORD }}';
-          END
-
-          IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'imrandbtnew')
-          BEGIN
-            CREATE USER imrandbtnew FOR LOGIN imrandbtnew;
-            ALTER ROLE db_owner ADD MEMBER imrandbtnew;
-          END
-
-          -- Create Schemas
-          IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'bronze') EXEC('CREATE SCHEMA bronze');
-          IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'silver') EXEC('CREATE SCHEMA silver');
-          IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'gold') EXEC('CREATE SCHEMA gold');
-        "
-        echo "✅ Database restore complete"
-
-    - name: Set up Python
-      uses: actions/setup-python@v4
+    - name: Setup SQL Server
+      uses: ./.github/actions/setup-sqlserver
       with:
+        sa-password: ${{ secrets.SA_PASSWORD }}
+
+    - name: Restore AdventureWorks Database
+      uses: ./.github/actions/restore-adventureworks
+      with:
+        sa-password: ${{ secrets.SA_PASSWORD }}
+        dbt-password: ${{ secrets.DBT_PASSWORD }}
+
+    - name: Setup DBT Environment
+      uses: ./.github/actions/setup-dbt
+      with:
+        dbt-profile-content: ${{ secrets.DBT_PROFILE }}
+        dbt-version: '1.8.5'
         python-version: '3.9'
 
-    - name: Install DBT
-      run: |
-        echo "📦 Installing DBT..."
-        # Upgrade both to ensure compatibility
-        pip install dbt-sqlserver==1.8.5 dbt-fabric
-
-    - name: Create profiles.yml from secret
-      run: |
-        cat <<EOF > dbt/profiles.yml
-        ${{ secrets.DBT_PROFILE }}
-        EOF
-
-    - name: Install DBT dependencies
-      id: dbt-deps
-      run: |
-        cd dbt
-        echo "📦 Installing DBT packages..."
-        dbt deps --profiles-dir .
-        echo "✅ DBT dependencies installed"
-
-    - name: Run DBT models
-      id: dbt-run
-      run: |
-        cd dbt
-        echo "🔄 Running DBT models for ${{ needs.pre-deploy-validation.outputs.environment }}..."
-        dbt run --profiles-dir . --target ${{ needs.pre-deploy-validation.outputs.target }} 2>&1 | tee dbt_run.log
-        echo "✅ DBT models executed successfully"
-
-    - name: Execute data quality tests
-      id: dbt-test
-      run: |
-        cd dbt
-        echo "🧪 Running data quality tests..."
-        dbt test --profiles-dir . --target ${{ needs.pre-deploy-validation.outputs.target }} 2>&1 | tee dbt_test.log
-        echo "✅ Data quality tests passed"
+    - name: Run DBT Pipeline
+      id: dbt-workflow
+      uses: ./.github/actions/run-dbt-workflow
+      with:
+        target: ${{ needs.pre-deploy-validation.outputs.target }}
+        run-models: 'true'
+        run-tests: 'true'
+        generate-docs: 'false'
 
     - name: Upload deployment logs
       uses: actions/upload-artifact@v4
@@ -377,25 +197,12 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
+    - name: Setup DBT Environment
+      uses: ./.github/actions/setup-dbt
       with:
+        dbt-profile-content: ${{ secrets.DBT_PROFILE }}
+        dbt-version: '1.8.5'
         python-version: '3.9'
-
-    - name: Install DBT
-      run: |
-        pip install dbt-sqlserver==1.8.5 dbt-fabric
-
-    - name: Create profiles.yml from secret
-      run: |
-        cat <<EOF > dbt/profiles.yml
-        ${{ secrets.DBT_PROFILE }}
-        EOF
-
-    - name: Install DBT dependencies
-      run: |
-        cd dbt
-        dbt deps --profiles-dir .
 
     - name: Run health check tests
       run: |
