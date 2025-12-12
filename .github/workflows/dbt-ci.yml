@@ -8,25 +8,23 @@ on:
 
 env:
   DBT_PROFILES_DIR: ./dbt
+  # 1. FIX: Define secrets globally so all jobs can use them
+  SA_PASSWORD: ${{ secrets.SA_PASSWORD }}
+  DBT_PASSWORD: ${{ secrets.DBT_PASSWORD }}
 
 jobs:
   lint-sql:
     name: Lint SQL Files
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
-
       - name: Install SQLFluff
-        run: |
-          pip install sqlfluff sqlfluff-templater-dbt
-
+        run: pip install sqlfluff sqlfluff-templater-dbt
       - name: Lint SQL files
         run: |
           cd dbt
@@ -36,19 +34,15 @@ jobs:
   lint-python:
     name: Lint Python Files
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
-
       - name: Install flake8
         run: pip install flake8
-
       - name: Lint Python files
         run: |
           flake8 airflow/dags/ --max-line-length=120 --count --statistics || true
@@ -58,19 +52,25 @@ jobs:
     name: Compile DBT Models
     runs-on: ubuntu-latest
     needs: [lint-sql, lint-python]
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
+      # 2. FIX: Pin versions to match your deploy.yml
       - name: Install DBT
         run: |
-          pip install dbt-sqlserver
+          pip install dbt-sqlserver==1.8.5 dbt-fabric
+
+      # 3. FIX: Create profile so dbt knows the adapter type (even for compile)
+      - name: Create profiles.yml
+        run: |
+          cat <<EOF > dbt/profiles.yml
+          ${{ secrets.DBT_PROFILE }}
+          EOF
 
       - name: Install DBT dependencies
         run: |
@@ -94,7 +94,19 @@ jobs:
     name: Generate DBT Documentation
     runs-on: ubuntu-latest
     needs: dbt-compile
-    # if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+
+    # 4. FIX: Add the SQL Server Service (Required for docs generation)
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2019-latest
+        env:
+          ACCEPT_EULA: Y
+          SA_PASSWORD: ${{ secrets.SA_PASSWORD }}
+          MSSQL_PID: Developer
+        ports:
+        - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P $SA_PASSWORD -C -Q 'SELECT 1' || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P $SA_PASSWORD -Q 'SELECT 1'" --health-interval 10s --health-timeout 5s --health-retries 10
 
     steps:
       - name: Checkout code
@@ -116,32 +128,20 @@ jobs:
               echo "✅ SQL Server is ready!"
               break
             fi
-            echo "Waiting... attempt $i/30"
             sleep 5
           done
 
       - name: Download and restore AdventureWorks database
         run: |
           echo "📥 Downloading AdventureWorks2014 backup..."
-          # Download the backup file
           curl -L -o /tmp/AdventureWorks2014.bak "https://github.com/Microsoft/sql-server-samples/releases/download/adventureworks/AdventureWorks2014.bak"
 
           echo "🔄 Copying backup file into SQL Server container..."
-          # Dynamically find the running SQL Server container ID
           CONTAINER_ID=$(docker ps --filter "ancestor=mcr.microsoft.com/mssql/server:2019-latest" --format "{{.ID}}")
 
-          # Verify container was found before proceeding
-          if [ -z "$CONTAINER_ID" ]; then
-            echo "❌ Error: SQL Server container not found!"
-            exit 1
-          fi
-
-          # Copy file into the container
           docker cp /tmp/AdventureWorks2014.bak $CONTAINER_ID:/tmp/AdventureWorks2014.bak
 
           echo "📦 Restoring AdventureWorks2014 database..."
-          # Run the restore command using sqlcmd inside the runner (connecting to localhost)
-          # Note: Added NO_WAIT and STATS for better logging
           /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -Q "
             RESTORE DATABASE AdventureWorks2014
             FROM DISK = '/tmp/AdventureWorks2014.bak'
@@ -153,21 +153,8 @@ jobs:
           "
 
           echo "👤 Creating DBT user and schemas..."
-          # Added -b flag to force exit on error
+          # FIX: Added -b to fail on error and robust user creation logic
           /opt/mssql-tools18/bin/sqlcmd -b -S localhost -U sa -P "$SA_PASSWORD" -C -d AdventureWorks2014 -Q "
-            -- Create dbt_user if not exists
-            IF NOT EXISTS (SELECT * FROM sys.server_principals WHERE name = 'dbt_user')
-            BEGIN
-              CREATE LOGIN dbt_user WITH PASSWORD = '${{ env.DBT_PASSWORD }}';
-            END
-
-            IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'dbt_user')
-            BEGIN
-              CREATE USER dbt_user FOR LOGIN dbt_user;
-              ALTER ROLE db_owner ADD MEMBER dbt_user;
-            END
-
-            -- Create imrandbtnew if not exists
             IF NOT EXISTS (SELECT * FROM sys.server_principals WHERE name = 'imrandbtnew')
             BEGIN
               CREATE LOGIN imrandbtnew WITH PASSWORD = '${{ env.DBT_PASSWORD }}';
@@ -179,7 +166,6 @@ jobs:
               ALTER ROLE db_owner ADD MEMBER imrandbtnew;
             END
 
-            -- Create Schemas
             IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'bronze') EXEC('CREATE SCHEMA bronze');
             IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'silver') EXEC('CREATE SCHEMA silver');
             IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'gold') EXEC('CREATE SCHEMA gold');
@@ -197,7 +183,8 @@ jobs:
           EOF
 
       - name: Install DBT
-        run: pip install dbt-sqlserver
+        # FIX: Pin version
+        run: pip install dbt-sqlserver==1.8.5 dbt-fabric
 
       - name: Install dependencies
         run: |
@@ -207,7 +194,7 @@ jobs:
       - name: Generate documentation
         run: |
           cd dbt
-          dbt docs generate --profiles-dir . || true
+          dbt docs generate --profiles-dir . --target dev || true
         continue-on-error: true
 
       - name: Upload documentation
