@@ -21,45 +21,45 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Validate DBT project
-      shell: bash
-      run: |
-        cd dbt
-        echo "🔍 Validating DBT project structure..."
-        dbt debug --profiles-dir .
-        echo "✅ DBT project validation passed"
+  - name: Validate DBT project
+    shell: bash
+    run: |
+      cd dbt
+      echo "🔍 Validating DBT project structure..."
+      dbt debug --profiles-dir .
+      echo "✅ DBT project validation passed"
 
-    - name: Compile DBT models
-      shell: bash
-      run: |
-        cd dbt
-        echo "🔄 Compiling DBT models..."
-        dbt compile --profiles-dir .
-        echo "✅ DBT models compiled successfully"
+  - name: Compile DBT models
+    shell: bash
+    run: |
+      cd dbt
+      echo "🔄 Compiling DBT models..."
+      dbt compile --profiles-dir .
+      echo "✅ DBT models compiled successfully"
 
-    - name: Run DBT models
-      if: inputs.run-models == 'true'
-      shell: bash
-      run: |
-        cd dbt
-        echo "🚀 Running DBT models for ${{ inputs.target }} environment..."
-        dbt run --profiles-dir . --target ${{ inputs.target }} 2>&1 | tee dbt_run.log
-        echo "✅ DBT models executed successfully"
+  - name: Run DBT models
+    if: inputs.run-models == 'true'
+    shell: bash
+    run: |
+      cd dbt
+      echo "🚀 Running DBT models for ${{ inputs.target }} environment..."
+      dbt run --profiles-dir . --target ${{ inputs.target }} 2>&1 | tee dbt_run.log
+      echo "✅ DBT models executed successfully"
 
-    - name: Run DBT tests
-      if: inputs.run-tests == 'true'
-      shell: bash
-      run: |
-        cd dbt
-        echo "🧪 Running data quality tests..."
-        dbt test --profiles-dir . --target ${{ inputs.target }} 2>&1 | tee dbt_test.log
-        echo "✅ Data quality tests passed"
+  - name: Run DBT tests
+    if: inputs.run-tests == 'true'
+    shell: bash
+    run: |
+      cd dbt
+      echo "🧪 Running data quality tests..."
+      dbt test --profiles-dir . --target ${{ inputs.target }} 2>&1 | tee dbt_test.log
+      echo "✅ Data quality tests passed"
 
-    - name: Generate DBT documentation
-      if: inputs.generate-docs == 'true'
-      shell: bash
-      run: |
-        cd dbt
-        echo "📚 Generating DBT documentation..."
-        dbt docs generate --profiles-dir . --target ${{ inputs.target }}
-        echo "✅ Documentation generated"
+  - name: Generate DBT documentation
+    if: inputs.generate-docs == 'true'
+    shell: bash
+    run: |
+      cd dbt
+      echo "📚 Generating DBT documentation..."
+      dbt docs generate --profiles-dir . --target ${{ inputs.target }}
+      echo "✅ Documentation generated"

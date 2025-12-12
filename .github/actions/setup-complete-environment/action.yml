@@ -23,20 +23,20 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Setup SQL Server
-      uses: ./.github/actions/setup-sqlserver
-      with:
-        sa-password: ${{ inputs.sa-password }}
+  - name: Setup SQL Server
+    uses: ./.github/actions/setup-sqlserver
+    with:
+      sa-password: ${{ inputs.sa-password }}
 
-    - name: Restore AdventureWorks Database
-      uses: ./.github/actions/restore-adventureworks
-      with:
-        sa-password: ${{ inputs.sa-password }}
-        dbt-password: ${{ inputs.dbt-password }}
+  - name: Restore AdventureWorks Database
+    uses: ./.github/actions/restore-adventureworks
+    with:
+      sa-password: ${{ inputs.sa-password }}
+      dbt-password: ${{ inputs.dbt-password }}
 
-    - name: Setup DBT Environment
-      uses: ./.github/actions/setup-dbt
-      with:
-        dbt-profile-content: ${{ inputs.dbt-profile-secret }}
-        dbt-version: ${{ inputs.dbt-version }}
-        python-version: ${{ inputs.python-version }}
+  - name: Setup DBT Environment
+    uses: ./.github/actions/setup-dbt
+    with:
+      dbt-profile-content: ${{ inputs.dbt-profile-secret }}
+      dbt-version: ${{ inputs.dbt-version }}
+      python-version: ${{ inputs.python-version }}

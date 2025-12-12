@@ -17,28 +17,28 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ inputs.python-version }}
+  - name: Set up Python
+    uses: actions/setup-python@v4
+    with:
+      python-version: ${{ inputs.python-version }}
 
-    - name: Install DBT
-      shell: bash
-      run: |
-        echo "📦 Installing DBT..."
-        pip install dbt-sqlserver==${{ inputs.dbt-version }} dbt-fabric
+  - name: Install DBT
+    shell: bash
+    run: |
+      echo "📦 Installing DBT..."
+      pip install dbt-sqlserver==${{ inputs.dbt-version }} dbt-fabric
 
-    - name: Create profiles.yml
-      shell: bash
-      run: |
-        cat <<EOF > dbt/profiles.yml
-        ${{ inputs.dbt-profile-content }}
-        EOF
+  - name: Create profiles.yml
+    shell: bash
+    run: |
+      cat <<EOF > dbt/profiles.yml
+      ${{ inputs.dbt-profile-content }}
+      EOF
 
-    - name: Install DBT dependencies
-      shell: bash
-      run: |
-        cd dbt
-        echo "📦 Installing DBT packages..."
-        dbt deps --profiles-dir .
-        echo "✅ DBT dependencies installed"
+  - name: Install DBT dependencies
+    shell: bash
+    run: |
+      cd dbt
+      echo "📦 Installing DBT packages..."
+      dbt deps --profiles-dir .
+      echo "✅ DBT dependencies installed"

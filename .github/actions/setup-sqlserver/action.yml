@@ -9,24 +9,24 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Install SQL Server tools
-      shell: bash
-      run: |
-        curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
-        curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
-        sudo apt-get update
-        sudo ACCEPT_EULA=Y apt-get install -y mssql-tools18 unixodbc-dev
-        echo 'export PATH="$PATH:/opt/mssql-tools18/bin"' >> ~/.bashrc
+  - name: Install SQL Server tools
+    shell: bash
+    run: |
+      curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
+      curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
+      sudo apt-get update
+      sudo ACCEPT_EULA=Y apt-get install -y mssql-tools18 unixodbc-dev
+      echo 'export PATH="$PATH:/opt/mssql-tools18/bin"' >> ~/.bashrc
 
-    - name: Wait for SQL Server to be ready
-      shell: bash
-      run: |
-        echo "⏳ Waiting for SQL Server to be ready..."
-        for i in {1..30}; do
-          if /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${{ inputs.sa-password }}" -C -Q "SELECT 1" &>/dev/null; then
-            echo "✅ SQL Server is ready!"
-            break
-          fi
-          echo "Waiting... attempt $i/30"
-          sleep 5
-        done
+  - name: Wait for SQL Server to be ready
+    shell: bash
+    run: |
+      echo "⏳ Waiting for SQL Server to be ready..."
+      for i in {1..30}; do
+        if /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${{ inputs.sa-password }}" -C -Q "SELECT 1" &>/dev/null; then
+          echo "✅ SQL Server is ready!"
+          break
+        fi
+        echo "Waiting... attempt $i/30"
+        sleep 5
+      done
