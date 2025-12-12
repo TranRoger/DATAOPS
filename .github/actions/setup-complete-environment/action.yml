@@ -1,0 +1,42 @@
+name: 'Setup Complete Environment'
+description: 'Installs tools, restores database, and configures DBT using composite actions'
+
+inputs:
+  sa-password:
+    description: 'SQL Server SA Password'
+    required: true
+  dbt-password:
+    description: 'DBT User Password'
+    required: true
+  dbt-profile-secret:
+    description: 'DBT Profile YAML Content'
+    required: true
+  dbt-version:
+    description: 'DBT SQL Server version'
+    required: false
+    default: '1.8.5'
+  python-version:
+    description: 'Python version'
+    required: false
+    default: '3.9'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup SQL Server
+      uses: ./.github/actions/setup-sqlserver
+      with:
+        sa-password: ${{ inputs.sa-password }}
+
+    - name: Restore AdventureWorks Database
+      uses: ./.github/actions/restore-adventureworks
+      with:
+        sa-password: ${{ inputs.sa-password }}
+        dbt-password: ${{ inputs.dbt-password }}
+
+    - name: Setup DBT Environment
+      uses: ./.github/actions/setup-dbt
+      with:
+        dbt-profile-content: ${{ inputs.dbt-profile-secret }}
+        dbt-version: ${{ inputs.dbt-version }}
+        python-version: ${{ inputs.python-version }}

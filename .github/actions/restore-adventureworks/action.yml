@@ -1,0 +1,71 @@
+name: 'Restore AdventureWorks Database'
+description: 'Download and restore AdventureWorks 2014 database with user creation'
+
+inputs:
+  sa-password:
+    description: 'SQL Server SA Password'
+    required: true
+  dbt-password:
+    description: 'DBT User Password'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Download and restore AdventureWorks database
+      shell: bash
+      run: |
+        echo "📥 Downloading AdventureWorks2014 backup..."
+        curl -L -o /tmp/AdventureWorks2014.bak \
+          "https://github.com/Microsoft/sql-server-samples/releases/download/adventureworks/AdventureWorks2014.bak"
+
+        echo "🔄 Copying backup file into SQL Server container..."
+        CONTAINER_ID=$(docker ps --filter "ancestor=mcr.microsoft.com/mssql/server:2019-latest" --format "{{.ID}}")
+
+        if [ -z "$CONTAINER_ID" ]; then
+          echo "❌ Error: SQL Server container not found!"
+          exit 1
+        fi
+
+        docker cp /tmp/AdventureWorks2014.bak $CONTAINER_ID:/tmp/AdventureWorks2014.bak
+
+        echo "📦 Restoring AdventureWorks2014 database..."
+        /opt/mssql-tools18/bin/sqlcmd -b -S localhost -U sa -P "${{ inputs.sa-password }}" -C -Q "
+          RESTORE DATABASE AdventureWorks2014
+          FROM DISK = '/tmp/AdventureWorks2014.bak'
+          WITH
+            MOVE 'AdventureWorks2014_Data' TO '/var/opt/mssql/data/AdventureWorks2014.mdf',
+            MOVE 'AdventureWorks2014_Log' TO '/var/opt/mssql/data/AdventureWorks2014_log.ldf',
+            REPLACE,
+            STATS = 10;
+        "
+
+        echo "👤 Creating DBT users and schemas..."
+        /opt/mssql-tools18/bin/sqlcmd -b -S localhost -U sa -P "${{ inputs.sa-password }}" -C -d AdventureWorks2014 -Q "
+          -- Create dbt_user if not exists
+          IF NOT EXISTS (SELECT * FROM sys.server_principals WHERE name = 'dbt_user')
+            CREATE LOGIN dbt_user WITH PASSWORD = '${{ inputs.dbt-password }}';
+
+          IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'dbt_user')
+          BEGIN
+            CREATE USER dbt_user FOR LOGIN dbt_user;
+            ALTER ROLE db_owner ADD MEMBER dbt_user;
+          END
+
+          -- Create imrandbtnew if not exists
+          IF NOT EXISTS (SELECT * FROM sys.server_principals WHERE name = 'imrandbtnew')
+            CREATE LOGIN imrandbtnew WITH PASSWORD = '${{ inputs.dbt-password }}';
+
+          IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'imrandbtnew')
+          BEGIN
+            CREATE USER imrandbtnew FOR LOGIN imrandbtnew;
+            ALTER ROLE db_owner ADD MEMBER imrandbtnew;
+          END
+
+          -- Create schemas
+          IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'bronze') EXEC('CREATE SCHEMA bronze');
+          IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'silver') EXEC('CREATE SCHEMA silver');
+          IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'gold') EXEC('CREATE SCHEMA gold');
+        "
+
+        echo "✅ Database restore complete"
