@@ -14,6 +14,12 @@ env:
   SA_PASSWORD: ${{ secrets.SA_PASSWORD }}
   DBT_PASSWORD: ${{ secrets.DBT_PASSWORD }}
 
+permissions:
+  contents: read
+  actions: write
+
+  pull-requests: write
+
 jobs:
   # ============================================
   # Pre-deployment Validation
@@ -388,11 +394,13 @@ jobs:
 
     - name: Install DBT
       run: |
-        pip install dbt-sqlserver==1.8.2
+        pip install dbt-sqlserver==1.8.5 dbt-fabric
 
     - name: Create profiles.yml from secret
       run: |
-        echo "${{ secrets.DBT_PROFILE }}" > dbt/profiles.yml
+        cat <<EOF > dbt/profiles.yml
+        ${{ secrets.DBT_PROFILE }}
+        EOF
 
     - name: Install DBT dependencies
       run: |
