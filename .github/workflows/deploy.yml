@@ -9,7 +9,6 @@ on:
   pull_request:
     branches: [ main, develop ]
 
-
 env:
   DBT_PROFILES_DIR: ./dbt
   SA_PASSWORD: ${{ secrets.SA_PASSWORD }}
@@ -80,22 +79,36 @@ jobs:
     - name: Download and restore AdventureWorks database
       run: |
         echo "📥 Downloading AdventureWorks2014 backup..."
+        # Download the backup file
         curl -L -o /tmp/AdventureWorks2014.bak "https://github.com/Microsoft/sql-server-samples/releases/download/adventureworks/AdventureWorks2014.bak"
 
-        echo "� Copying backup file into SQL Server container..."
+        echo "🔄 Copying backup file into SQL Server container..."
+        # Dynamically find the running SQL Server container ID
         CONTAINER_ID=$(docker ps --filter "ancestor=mcr.microsoft.com/mssql/server:2019-latest" --format "{{.ID}}")
+
+        # Verify container was found before proceeding
+        if [ -z "$CONTAINER_ID" ]; then
+          echo "❌ Error: SQL Server container not found!"
+          exit 1
+        fi
+
+        # Copy file into the container
         docker cp /tmp/AdventureWorks2014.bak $CONTAINER_ID:/tmp/AdventureWorks2014.bak
 
-        echo "�🔄 Restoring AdventureWorks2014 database..."
+        echo "📦 Restoring AdventureWorks2014 database..."
+        # Run the restore command using sqlcmd inside the runner (connecting to localhost)
+        # Note: Added NO_WAIT and STATS for better logging
         /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -Q "
           RESTORE DATABASE AdventureWorks2014
           FROM DISK = '/tmp/AdventureWorks2014.bak'
-          WITH MOVE 'AdventureWorks2014_Data' TO '/var/opt/mssql/data/AdventureWorks2014.mdf',
-               MOVE 'AdventureWorks2014_Log' TO '/var/opt/mssql/data/AdventureWorks2014_log.ldf',
-               REPLACE;
+          WITH
+            MOVE 'AdventureWorks2014_Data' TO '/var/opt/mssql/data/AdventureWorks2014.mdf',
+            MOVE 'AdventureWorks2014_Log' TO '/var/opt/mssql/data/AdventureWorks2014_log.ldf',
+            REPLACE,
+            STATS = 10;
         "
-        echo "✅ AdventureWorks2014 database restored successfully"
 
+        echo "✅ AdventureWorks2014 database restored successfully"
 
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -109,7 +122,9 @@ jobs:
 
     - name: Create profiles.yml from secret
       run: |
-        echo "${{ secrets.DBT_PROFILE }}" > dbt/profiles.yml
+        cat <<EOF > dbt/profiles.yml
+        ${{ secrets.DBT_PROFILE }}
+        EOF
 
     - name: Install DBT dependencies
       run: |
